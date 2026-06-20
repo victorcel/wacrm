@@ -55,6 +55,20 @@ export class ForbiddenError extends Error {
 }
 
 /**
+ * The caller is authenticated and has the right role, but their
+ * account has no active subscription (expired, suspended, or never
+ * activated). Routes that mutate billable data throw this so the UI
+ * can steer the user to /suspended / contact the admin.
+ */
+export class PaymentRequiredError extends Error {
+  readonly status = 402 as const;
+  constructor(message = "Subscription inactive") {
+    super(message);
+    this.name = "PaymentRequiredError";
+  }
+}
+
+/**
  * Convert one of the typed errors above (or anything else) into a
  * `NextResponse`. Routes can do:
  *
@@ -67,7 +81,11 @@ export class ForbiddenError extends Error {
  * server internals out of the wire.
  */
 export function toErrorResponse(err: unknown): NextResponse {
-  if (err instanceof UnauthorizedError || err instanceof ForbiddenError) {
+  if (
+    err instanceof UnauthorizedError ||
+    err instanceof ForbiddenError ||
+    err instanceof PaymentRequiredError
+  ) {
     return NextResponse.json({ error: err.message }, { status: err.status });
   }
   console.error("[toErrorResponse] uncategorized error:", err);
@@ -77,6 +95,29 @@ export function toErrorResponse(err: unknown): NextResponse {
 // ------------------------------------------------------------
 // Account context
 // ------------------------------------------------------------
+
+/** The plan a subscription points at, normalised for app use. */
+export interface SubscriptionPlanInfo {
+  key: string;
+  name: string;
+  /** NULL = unlimited. */
+  maxSeats: number | null;
+  /** NULL = unlimited. */
+  maxBroadcastsPerMonth: number | null;
+  /** Gated-module flag map, e.g. { automations: true, flows: false }. */
+  features: Record<string, boolean>;
+}
+
+/** The caller's account subscription state, normalised for app use. */
+export interface SubscriptionInfo {
+  status: string;
+  /** Derived: status active/trialing AND period not ended. */
+  isActive: boolean;
+  planId: string | null;
+  /** ISO timestamp or null (never expires). */
+  periodEnd: string | null;
+  plan: SubscriptionPlanInfo | null;
+}
 
 export interface AccountContext {
   /** Supabase SSR client, RLS scoped to the calling user. */
@@ -89,6 +130,8 @@ export interface AccountContext {
   role: AccountRole;
   /** Lightweight account meta — id + name. */
   account: { id: string; name: string };
+  /** Billing/subscription state for the caller's account. */
+  subscription: SubscriptionInfo;
 }
 
 /**
@@ -146,12 +189,66 @@ export async function getCurrentAccount(): Promise<AccountContext> {
   // for `!inner` single-record joins; normalise to a single object.
   const accountRow = Array.isArray(data.account) ? data.account[0] : data.account;
 
+  const subscription = await loadSubscription(supabase, data.account_id);
+
   return {
     supabase,
     userId: user.id,
     accountId: data.account_id,
     role: data.account_role,
     account: { id: accountRow.id, name: accountRow.name },
+    subscription,
+  };
+}
+
+/**
+ * Load and normalise the account's subscription + plan. A missing
+ * subscription row (shouldn't happen post-024 migration) is treated
+ * as inactive rather than fatal, so the gate steers the user to
+ * /suspended instead of throwing a 500.
+ */
+async function loadSubscription(
+  supabase: SupabaseClient,
+  accountId: string,
+): Promise<SubscriptionInfo> {
+  const { data, error } = await supabase
+    .from("account_subscriptions")
+    .select(
+      "status, current_period_end, plan_id, plan:subscription_plans(key, name, max_seats, max_broadcasts_per_month, features)",
+    )
+    .eq("account_id", accountId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[loadSubscription] fetch error:", error);
+  }
+
+  if (!data) {
+    return { status: "inactive", isActive: false, planId: null, periodEnd: null, plan: null };
+  }
+
+  const planRow = Array.isArray(data.plan) ? data.plan[0] : data.plan;
+  const plan: SubscriptionPlanInfo | null = planRow
+    ? {
+        key: planRow.key,
+        name: planRow.name,
+        maxSeats: planRow.max_seats ?? null,
+        maxBroadcastsPerMonth: planRow.max_broadcasts_per_month ?? null,
+        features: (planRow.features ?? {}) as Record<string, boolean>,
+      }
+    : null;
+
+  const periodEnd: string | null = data.current_period_end ?? null;
+  const isActive =
+    (data.status === "active" || data.status === "trialing") &&
+    (periodEnd === null || new Date(periodEnd).getTime() > Date.now());
+
+  return {
+    status: data.status,
+    isActive,
+    planId: data.plan_id ?? null,
+    periodEnd,
+    plan,
   };
 }
 
@@ -168,6 +265,26 @@ export async function requireRole(min: AccountRole): Promise<AccountContext> {
     throw new ForbiddenError(
       `This action requires the '${min}' role or higher`,
     );
+  }
+  return ctx;
+}
+
+/**
+ * Like `requireRole`, but also requires the account's subscription
+ * to be active. Use on routes that create/mutate billable data
+ * (broadcasts, invitations, automations) so an expired account is
+ * blocked at the API even if it somehow bypasses the UI gate.
+ *
+ * Throws `PaymentRequiredError` (402) when the subscription is not
+ * active. Platform admins are billing-exempt (they operate the
+ * platform, not a customer account).
+ */
+export async function requireActiveSubscription(
+  min: AccountRole,
+): Promise<AccountContext> {
+  const ctx = await requireRole(min);
+  if (!ctx.subscription.isActive) {
+    throw new PaymentRequiredError();
   }
   return ctx;
 }

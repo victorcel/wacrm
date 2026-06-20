@@ -135,19 +135,24 @@ function LoginPageInner() {
             </Button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            ¿No tienes una cuenta?{" "}
-            <Link
-              href={
-                inviteToken
-                  ? `/signup?invite=${encodeURIComponent(inviteToken)}`
-                  : "/signup"
-              }
-              className="text-primary hover:text-primary/80"
-            >
-              Crear cuenta
-            </Link>
-          </p>
+          {/* Registration is invite-only. The "create account" CTA
+              only appears when accepting an invitation; otherwise new
+              companies are onboarded by the platform admin. */}
+          {inviteToken ? (
+            <p className="mt-6 text-center text-sm text-muted-foreground">
+              ¿No tienes una cuenta?{" "}
+              <Link
+                href={`/signup?invite=${encodeURIComponent(inviteToken)}`}
+                className="text-primary hover:text-primary/80"
+              >
+                Crear cuenta y unirse
+              </Link>
+            </p>
+          ) : (
+            <p className="mt-6 text-center text-sm text-muted-foreground">
+              El registro es solo por invitación.
+            </p>
+          )}
         </CardContent>
       </Card>
     </div>

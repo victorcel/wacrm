@@ -90,6 +90,41 @@ function SignupPageInner() {
     setLoading(false);
   };
 
+  // Registration is invite-only: companies are onboarded by the
+  // platform admin (who emails the owner a Supabase invite). Without
+  // an invite token in the URL there is nothing to sign up for, so we
+  // show a notice instead of the form. The invited-member flow still
+  // works because it always carries `?invite=<token>`.
+  if (!inviteToken) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md border-border bg-card">
+          <CardHeader className="items-center text-center">
+            <BrandWordmark className="mx-auto mb-3 block h-9 w-auto" />
+            <CardTitle className="text-xl text-foreground">
+              Registro solo por invitación
+            </CardTitle>
+            <CardDescription className="text-muted-foreground">
+              Las cuentas de empresa se crean por el equipo de TRAFIKOS. Si ya
+              tienes una invitación, ábrela desde el enlace que recibiste. Para
+              contratar un plan, contacta con ventas.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/login">
+              <Button
+                variant="outline"
+                className="w-full border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                Volver a iniciar sesión
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (success) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
