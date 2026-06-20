@@ -13,7 +13,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { MessageSquare, CheckCircle, ArrowLeft } from "lucide-react";
+import { CheckCircle, ArrowLeft } from "lucide-react";
+import { BrandWordmark } from "@/components/brand-wordmark";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -77,9 +78,7 @@ export default function ForgotPasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md border-border bg-card">
         <CardHeader className="items-center text-center">
-          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-            <MessageSquare className="h-6 w-6 text-primary" />
-          </div>
+          <BrandWordmark className="mx-auto mb-3 block h-9 w-auto" />
           <CardTitle className="text-xl text-foreground">Restablecer contraseña</CardTitle>
           <CardDescription className="text-muted-foreground">
             Introduce tu correo y te enviaremos un enlace para restablecerla

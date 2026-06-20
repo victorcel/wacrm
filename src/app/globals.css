@@ -147,7 +147,26 @@ html[data-mode="light"] {
 
 /* ---- ACCENT: primary color ---- */
 
+/* Trafikos brand turquoise — sampled from the logo mark (≈ #00d6ae)
+ * and the default accent so the app matches the product's own
+ * branding out of the box. Dark foreground (not white) because the
+ * hue sits too light/bright at this chroma for white text to clear
+ * contrast — same tradeoff amber and emerald make below. */
 :root,
+html[data-theme="trafikos"] {
+  --primary: oklch(0.78 0.15 173);
+  --primary-foreground: oklch(0.18 0.02 173);
+  --primary-hover: oklch(0.84 0.13 173);
+  --primary-soft: oklch(0.78 0.15 173 / 0.12);
+  --primary-soft-2: oklch(0.78 0.15 173 / 0.22);
+  --ring: oklch(0.78 0.15 173);
+  --chart-1: oklch(0.78 0.15 173);
+  --chart-2: oklch(0.55 0.1 173);
+  --sidebar-primary: oklch(0.78 0.15 173);
+  --sidebar-primary-foreground: oklch(0.18 0.02 173);
+  --sidebar-ring: oklch(0.78 0.15 173);
+}
+
 html[data-theme="violet"] {
   --primary: oklch(0.526 0.247 293);
   --primary-foreground: oklch(0.985 0 0);

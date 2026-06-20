@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -179,11 +180,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <MessageSquare className="h-4 w-4" />
-            </div>
-            <span className="text-sm font-semibold text-foreground">
-              Plantilla CRM para WhatsApp
+            <Image
+              src="/brand/icon-mark.png"
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0"
+              priority
+            />
+            <span className="text-sm font-semibold tracking-tight text-foreground">
+              TRAFIKOS
             </span>
           </Link>
           <button

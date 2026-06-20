@@ -14,6 +14,7 @@
  */
 
 export const THEME_IDS = [
+  "trafikos",
   "violet",
   "emerald",
   "cobalt",
@@ -23,7 +24,7 @@ export const THEME_IDS = [
 
 export type ThemeId = (typeof THEME_IDS)[number];
 
-export const DEFAULT_THEME: ThemeId = "violet";
+export const DEFAULT_THEME: ThemeId = "trafikos";
 
 export const STORAGE_KEY = "wacrm.theme";
 
@@ -68,33 +69,39 @@ export interface ThemeMeta {
 
 export const THEMES: ReadonlyArray<ThemeMeta> = [
   {
+    id: "trafikos",
+    name: "Trafikos",
+    tagline: "El turquesa de marca — predeterminado.",
+    swatch: "oklch(0.78 0.15 173)",
+  },
+  {
     id: "violet",
-    name: "Violet",
-    tagline: "The default — confident, slightly playful.",
+    name: "Violeta",
+    tagline: "Seguro y con un toque de personalidad.",
     swatch: "oklch(0.526 0.247 293)",
   },
   {
     id: "emerald",
-    name: "Emerald",
-    tagline: "Growth-coded, nods at messaging without copying WhatsApp green.",
+    name: "Esmeralda",
+    tagline: "Crecimiento y mensajería, sin copiar el verde de WhatsApp.",
     swatch: "oklch(0.62 0.16 162)",
   },
   {
     id: "cobalt",
-    name: "Cobalt",
-    tagline: "Clean B2B-SaaS blue — calm and product-y.",
+    name: "Cobalto",
+    tagline: "Azul SaaS B2B — calmado y profesional.",
     swatch: "oklch(0.585 0.2 254)",
   },
   {
     id: "amber",
-    name: "Amber",
-    tagline: "Warm and friendly — feels good for SMB teams.",
+    name: "Ámbar",
+    tagline: "Cálido y cercano — ideal para equipos PYME.",
     swatch: "oklch(0.745 0.16 65)",
   },
   {
     id: "rose",
-    name: "Rose",
-    tagline: "Bold and modern — D2C, creator-economy, lifestyle.",
+    name: "Rosa",
+    tagline: "Atrevido y moderno — D2C, creadores, lifestyle.",
     swatch: "oklch(0.645 0.22 16)",
   },
 ];
