@@ -15,7 +15,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toEndOfDayISO } from "./utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toEndOfDayISO, PAYMENT_METHODS } from "./utils";
 
 interface RecordPaymentDialogProps {
   /** The company to record against, or null when closed. */
@@ -124,12 +131,18 @@ export function RecordPaymentDialog({
             <Label className="text-muted-foreground">
               Método <span className="text-xs">(opcional)</span>
             </Label>
-            <Input
-              value={method}
-              onChange={(e) => setMethod(e.target.value)}
-              placeholder="Transferencia"
-              className="bg-muted border-border text-foreground"
-            />
+            <Select value={method} onValueChange={(v) => setMethod(v ?? "")}>
+              <SelectTrigger className="w-full bg-muted border-border text-foreground">
+                <SelectValue placeholder="Seleccionar método" />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYMENT_METHODS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-2">

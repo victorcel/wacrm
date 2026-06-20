@@ -13,6 +13,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 
@@ -63,6 +64,7 @@ export function CustomFieldsPanel() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<CustomField | null>(null);
 
   const fetchFields = useCallback(async () => {
     if (!accountId) return;
@@ -150,13 +152,13 @@ export function CustomFieldsPanel() {
   }
 
   async function handleDelete(field: CustomField) {
-    if (
-      !window.confirm(
-        `¿Eliminar "${field.field_name}"? También elimina su valor guardado en cada contacto. Esta acción no se puede deshacer.`
-      )
-    ) {
-      return;
-    }
+    setPendingDelete(field);
+  }
+
+  async function confirmDelete() {
+    const field = pendingDelete;
+    if (!field) return;
+    setPendingDelete(null);
     setBusyId(field.id);
     const { error } = await supabase
       .from('custom_fields')
@@ -226,6 +228,17 @@ export function CustomFieldsPanel() {
           </ul>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onOpenChange={() => setPendingDelete(null)}
+        title={pendingDelete ? `¿Eliminar "${pendingDelete.field_name}"?` : ""}
+        description="También se eliminará su valor guardado en cada contacto. Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        destructive
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

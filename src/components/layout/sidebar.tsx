@@ -16,6 +16,7 @@ import {
   Radio,
   Settings,
   Shield,
+  ShieldCheck,
   User,
   UserCog,
   Users,
@@ -85,16 +86,22 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /**
+   * When set, the item is hidden if `planFeatures[featureKey] === false`.
+   * A missing key (undefined) is treated as allowed so plans without the
+   * key don't accidentally hide items.
+   */
+  featureKey?: string;
 }
 
 const navItems: NavItem[] = [
   { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
-  { href: "/inbox", label: "Bandeja de entrada", icon: MessageSquare },
-  { href: "/contacts", label: "Contactos", icon: Users },
-  { href: "/pipelines", label: "Embudos", icon: GitBranch },
-  { href: "/broadcasts", label: "Difusiones", icon: Radio },
-  { href: "/automations", label: "Automatizaciones", icon: Zap },
-  { href: "/flows", label: "Flujos", icon: Workflow, beta: true },
+  { href: "/inbox", label: "Bandeja de entrada", icon: MessageSquare, featureKey: "inbox" },
+  { href: "/contacts", label: "Contactos", icon: Users, featureKey: "contacts" },
+  { href: "/pipelines", label: "Embudos", icon: GitBranch, featureKey: "pipelines" },
+  { href: "/broadcasts", label: "Difusiones", icon: Radio, featureKey: "broadcasts" },
+  { href: "/automations", label: "Automatizaciones", icon: Zap, featureKey: "automations" },
+  { href: "/flows", label: "Flujos", icon: Workflow, beta: true, featureKey: "flows" },
 ];
 
 const bottomNavItems = [
@@ -109,8 +116,13 @@ interface SidebarProps {
 
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
-  const { profile, profileLoading, account, accountRole, signOut } = useAuth();
+  const { profile, profileLoading, account, accountRole, signOut, planFeatures, isPlatformAdmin } = useAuth();
   const totalUnread = useTotalUnread();
+  // Only show nav items whose feature flag is not explicitly false.
+  // While planFeatures is loading ({}) every item is visible (missing key = allowed).
+  const visibleNavItems = navItems.filter(
+    (item) => !item.featureKey || planFeatures[item.featureKey] !== false,
+  );
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -205,7 +217,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -272,6 +284,22 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 </li>
               );
             })}
+            {isPlatformAdmin && (
+              <li>
+                <Link
+                  href="/admin"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                    pathname.startsWith("/admin")
+                      ? "bg-amber-500/10 text-amber-300"
+                      : "text-amber-400/70 hover:bg-amber-500/10 hover:text-amber-300",
+                  )}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Panel Admin
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
 

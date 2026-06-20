@@ -1,6 +1,18 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Map of URL path prefixes to their plan feature key.
+// A user whose plan has `features[key] === false` is redirected
+// to /dashboard when they try to visit the corresponding route.
+const FEATURE_ROUTES: [string, string][] = [
+  ['/inbox',       'inbox'],
+  ['/contacts',    'contacts'],
+  ['/pipelines',   'pipelines'],
+  ['/broadcasts',  'broadcasts'],
+  ['/automations', 'automations'],
+  ['/flows',       'flows'],
+]
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -64,6 +76,35 @@ export async function middleware(request: NextRequest) {
   if (!user && request.nextUrl.pathname.startsWith('/api/whatsapp/') &&
       !request.nextUrl.pathname.includes('/webhook')) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  // ── Feature-gate enforcement ─────────────────────────────────
+  // Only run for authenticated users visiting a feature-gated
+  // page route. API calls and unauthenticated requests are not
+  // checked here (API routes use requireFeature() server-side).
+  if (user) {
+    const pathname = request.nextUrl.pathname
+
+    // Skip API routes — they have their own requireFeature() guards.
+    if (!pathname.startsWith('/api/')) {
+      const matched = FEATURE_ROUTES.find(
+        ([prefix]) => pathname === prefix || pathname.startsWith(prefix + '/')
+      )
+
+      if (matched) {
+        const featureKey = matched[1]
+        // Single RPC call returns the user's plan features JSONB.
+        // Missing key → undefined → allowed (same rule as the app layer).
+        const { data: features } = await supabase.rpc('get_my_plan_features')
+
+        if (features && (features as Record<string, boolean>)[featureKey] === false) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/dashboard'
+          url.search = ''
+          return NextResponse.redirect(url)
+        }
+      }
+    }
   }
 
   return supabaseResponse

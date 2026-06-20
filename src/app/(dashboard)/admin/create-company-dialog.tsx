@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toEndOfDayISO } from "./utils";
+import { toEndOfDayISO, PAYMENT_METHODS } from "./utils";
 
 export interface PlanOption {
   id: string;
@@ -200,12 +200,18 @@ export function CreateCompanyDialog({
               <Label className="text-muted-foreground">
                 Método <span className="text-xs">(opcional)</span>
               </Label>
-              <Input
-                value={method}
-                onChange={(e) => setMethod(e.target.value)}
-                placeholder="Transferencia"
-                className="bg-muted border-border text-foreground"
-              />
+              <Select value={method} onValueChange={(v) => setMethod(v ?? "")}>
+                <SelectTrigger className="w-full bg-muted border-border text-foreground">
+                  <SelectValue placeholder="Seleccionar método" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((m) => (
+                    <SelectItem key={m.value} value={m.value}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 

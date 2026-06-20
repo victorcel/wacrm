@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireActiveSubscription, toErrorResponse } from '@/lib/auth/account'
 import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import type { SendTimeParams } from '@/lib/whatsapp/template-send-builder'
@@ -60,40 +60,38 @@ interface NewRecipient {
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
+    // Auth + subscription gate. Uses requireActiveSubscription so an
+    // expired/suspended account is blocked here even if it bypasses
+    // the dashboard layout gate (belt-and-suspenders).
+    const ctx = await requireActiveSubscription('agent')
+    const { supabase, userId, accountId } = ctx
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Per-user broadcast budget. Note: this limits how often a user
-    // can *start* a campaign, not how many messages go out inside
-    // one — the fan-out loop below runs without additional gating.
-    const limit = checkRateLimit(`broadcast:${user.id}`, RATE_LIMITS.broadcast)
+    // Per-user broadcast budget.
+    const limit = checkRateLimit(`broadcast:${userId}`, RATE_LIMITS.broadcast)
     if (!limit.success) {
       return rateLimitResponse(limit)
     }
 
-    // Resolve the caller's account_id. whatsapp_config + templates
-    // + broadcasts are all account-scoped post-multi-user, so the
-    // old `.eq('user_id', user.id)` filters miss every row created
-    // by a teammate.
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('account_id')
-      .eq('user_id', user.id)
-      .maybeSingle()
-    const accountId = profile?.account_id as string | undefined
-    if (!accountId) {
-      return NextResponse.json(
-        { error: 'Your profile is not linked to an account.' },
-        { status: 403 },
-      )
+    // Monthly broadcast limit — count broadcasts created since the
+    // start of the current calendar month. null = unlimited.
+    const maxBroadcasts = ctx.subscription.plan?.maxBroadcastsPerMonth ?? null
+    if (maxBroadcasts !== null) {
+      const monthStart = new Date()
+      monthStart.setDate(1)
+      monthStart.setHours(0, 0, 0, 0)
+      const { count } = await supabase
+        .from('broadcasts')
+        .select('id', { count: 'exact', head: true })
+        .eq('account_id', accountId)
+        .gte('created_at', monthStart.toISOString())
+      if ((count ?? 0) >= maxBroadcasts) {
+        return NextResponse.json(
+          {
+            error: `Has alcanzado el límite de ${maxBroadcasts} difusión${maxBroadcasts === 1 ? '' : 'es'} este mes de tu plan. Actualiza tu suscripción para enviar más.`,
+          },
+          { status: 402 },
+        )
+      }
     }
 
     const body = await request.json()
@@ -254,10 +252,6 @@ export async function POST(request: Request) {
       results,
     })
   } catch (error) {
-    console.error('Error in WhatsApp broadcast POST:', error)
-    return NextResponse.json(
-      { error: 'Failed to process broadcast' },
-      { status: 500 }
-    )
+    return toErrorResponse(error)
   }
 }

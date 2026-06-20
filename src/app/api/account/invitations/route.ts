@@ -19,7 +19,7 @@
 
 import { NextResponse } from "next/server";
 
-import { requireRole, toErrorResponse } from "@/lib/auth/account";
+import { requireRole, requireActiveSubscription, toErrorResponse } from "@/lib/auth/account";
 import {
   clampExpiryDays,
   generateInviteToken,
@@ -166,7 +166,34 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const ctx = await requireRole("admin");
+    const ctx = await requireActiveSubscription("admin");
+
+    // Seat limit check: count existing members + pending un-expired invitations.
+    const maxSeats = ctx.subscription.plan?.maxSeats ?? null;
+    if (maxSeats !== null) {
+      const [membersRes, invitesRes] = await Promise.all([
+        ctx.supabase
+          .from("profiles")
+          .select("user_id", { count: "exact", head: true })
+          .eq("account_id", ctx.accountId),
+        ctx.supabase
+          .from("account_invitations")
+          .select("id", { count: "exact", head: true })
+          .eq("account_id", ctx.accountId)
+          .is("accepted_at", null)
+          .gt("expires_at", new Date().toISOString()),
+      ]);
+      const currentCount =
+        (membersRes.count ?? 0) + (invitesRes.count ?? 0);
+      if (currentCount >= maxSeats) {
+        return NextResponse.json(
+          {
+            error: `Has alcanzado el límite de ${maxSeats} asiento${maxSeats === 1 ? "" : "s"} de tu plan. Actualiza tu suscripción para agregar más miembros.`,
+          },
+          { status: 402 },
+        );
+      }
+    }
 
     // 30/min per user. The Members tab is a clicks-only UI so any
     // legitimate admin is far below this; the cap exists to keep

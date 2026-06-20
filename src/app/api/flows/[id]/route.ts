@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireFeature, toErrorResponse } from '@/lib/auth/account'
 import { supabaseAdmin } from '@/lib/flows/admin-client'
 
 /**
@@ -12,63 +12,9 @@ import { supabaseAdmin } from '@/lib/flows/admin-client'
  * DELETE /api/flows/[id] — hard delete (RLS+CASCADE clean up nodes,
  *                          runs, events).
  *
- * All three require a signed-in caller who owns the flow. Flows is in
- * soft-GA — the beta gate that previously 404'd non-beta accounts is
- * gone; the "Beta" label in the UI is the only remaining signal.
+ * All three require an active subscription + feature access for flows.
+ * Ownership is enforced via RLS on the user-scoped client.
  */
-
-async function requireOwnership(
-  flowId: string,
-): Promise<
-  | {
-      ok: true
-      userId: string
-      supabase: Awaited<ReturnType<typeof createClient>>
-    }
-  | { ok: false; status: number; body: { error: string } }
-> {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) {
-    return { ok: false, status: 401, body: { error: 'Unauthorized' } }
-  }
-  // RLS scopes this to the caller — a flow owned by another user
-  // returns null (404 below).
-  const { data: flow } = await supabase
-    .from('flows')
-    .select('id')
-    .eq('id', flowId)
-    .maybeSingle()
-  if (!flow) {
-    return { ok: false, status: 404, body: { error: 'Not found' } }
-  }
-  return { ok: true, userId: user.id, supabase }
-}
-
-export async function GET(
-  _request: Request,
-  context: { params: Promise<{ id: string }> },
-) {
-  const { id } = await context.params
-  const guard = await requireOwnership(id)
-  if (!guard.ok) return NextResponse.json(guard.body, { status: guard.status })
-  const { supabase } = guard
-
-  const [{ data: flow }, { data: nodes }] = await Promise.all([
-    supabase.from('flows').select('*').eq('id', id).maybeSingle(),
-    supabase
-      .from('flow_nodes')
-      .select('*')
-      .eq('flow_id', id)
-      .order('created_at', { ascending: true }),
-  ])
-  if (!flow) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
-  return NextResponse.json({ flow, nodes: nodes ?? [] })
-}
 
 interface PutBody {
   name?: string
@@ -86,90 +32,103 @@ interface PutBody {
   }>
 }
 
+export async function GET(
+  _request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
+  const { id } = await context.params
+  try {
+    const ctx = await requireFeature('flows', 'agent')
+    // RLS scopes to caller's account
+    const { data: exists } = await ctx.supabase
+      .from('flows')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle()
+    if (!exists) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const [{ data: flow }, { data: nodes }] = await Promise.all([
+      ctx.supabase.from('flows').select('*').eq('id', id).maybeSingle(),
+      ctx.supabase
+        .from('flow_nodes')
+        .select('*')
+        .eq('flow_id', id)
+        .order('created_at', { ascending: true }),
+    ])
+    if (!flow) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json({ flow, nodes: nodes ?? [] })
+  } catch (err) {
+    return toErrorResponse(err)
+  }
+}
+
 export async function PUT(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params
-  const guard = await requireOwnership(id)
-  if (!guard.ok) return NextResponse.json(guard.body, { status: guard.status })
+  try {
+    const ctx = await requireFeature('flows', 'agent')
 
-  const body = (await request.json().catch(() => null)) as PutBody | null
-  if (!body) {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-  }
-  if (body.name !== undefined && !body.name.trim()) {
-    return NextResponse.json(
-      { error: 'name cannot be empty' },
-      { status: 400 },
-    )
-  }
-
-  const admin = supabaseAdmin()
-
-  // Update the flow row first — the body may not include `nodes` (a
-  // header-only save for editing the trigger config without touching
-  // the graph). Skip node replacement in that case.
-  const flowPatch: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
-  }
-  if (body.name !== undefined) flowPatch.name = body.name.trim()
-  if (body.description !== undefined)
-    flowPatch.description = body.description
-  if (body.trigger_type !== undefined) flowPatch.trigger_type = body.trigger_type
-  if (body.trigger_config !== undefined)
-    flowPatch.trigger_config = body.trigger_config
-  if (body.entry_node_id !== undefined)
-    flowPatch.entry_node_id = body.entry_node_id
-  if (body.fallback_policy !== undefined)
-    flowPatch.fallback_policy = body.fallback_policy
-
-  const { error: updErr } = await admin
-    .from('flows')
-    .update(flowPatch)
-    .eq('id', id)
-  if (updErr) {
-    return NextResponse.json({ error: updErr.message }, { status: 500 })
-  }
-
-  if (body.nodes !== undefined) {
-    // Delete-then-insert. Not transactional but the runner handles
-    // mid-edit reads safely (a node_not_found ends the run cleanly).
-    const { error: delErr } = await admin
-      .from('flow_nodes')
-      .delete()
-      .eq('flow_id', id)
-    if (delErr) {
-      return NextResponse.json({ error: delErr.message }, { status: 500 })
+    const body = (await request.json().catch(() => null)) as PutBody | null
+    if (!body) return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+    if (body.name !== undefined && !body.name.trim()) {
+      return NextResponse.json({ error: 'name cannot be empty' }, { status: 400 })
     }
-    if (body.nodes.length > 0) {
-      const { error: insErr } = await admin.from('flow_nodes').insert(
-        body.nodes.map((n) => ({
-          flow_id: id,
-          node_key: n.node_key,
-          node_type: n.node_type,
-          config: n.config,
-          position_x: n.position_x ?? 0,
-          position_y: n.position_y ?? 0,
-        })),
-      )
-      if (insErr) {
-        return NextResponse.json({ error: insErr.message }, { status: 500 })
+
+    // Ownership check via RLS before write
+    const { data: exists } = await ctx.supabase
+      .from('flows')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle()
+    if (!exists) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const admin = supabaseAdmin()
+
+    const flowPatch: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    }
+    if (body.name !== undefined) flowPatch.name = body.name.trim()
+    if (body.description !== undefined) flowPatch.description = body.description
+    if (body.trigger_type !== undefined) flowPatch.trigger_type = body.trigger_type
+    if (body.trigger_config !== undefined) flowPatch.trigger_config = body.trigger_config
+    if (body.entry_node_id !== undefined) flowPatch.entry_node_id = body.entry_node_id
+    if (body.fallback_policy !== undefined) flowPatch.fallback_policy = body.fallback_policy
+
+    const { error: updErr } = await admin.from('flows').update(flowPatch).eq('id', id)
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+
+    if (body.nodes !== undefined) {
+      const { error: delErr } = await admin.from('flow_nodes').delete().eq('flow_id', id)
+      if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+      if (body.nodes.length > 0) {
+        const { error: insErr } = await admin.from('flow_nodes').insert(
+          body.nodes.map((n) => ({
+            flow_id: id,
+            node_key: n.node_key,
+            node_type: n.node_type,
+            config: n.config,
+            position_x: n.position_x ?? 0,
+            position_y: n.position_y ?? 0,
+          })),
+        )
+        if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
       }
     }
-  }
 
-  // Re-fetch and return the new state — the editor uses the response
-  // to reconcile its local form state.
-  const [{ data: flow }, { data: nodes }] = await Promise.all([
-    admin.from('flows').select('*').eq('id', id).maybeSingle(),
-    admin
-      .from('flow_nodes')
-      .select('*')
-      .eq('flow_id', id)
-      .order('created_at', { ascending: true }),
-  ])
-  return NextResponse.json({ flow, nodes: nodes ?? [] })
+    const [{ data: flow }, { data: nodes }] = await Promise.all([
+      admin.from('flows').select('*').eq('id', id).maybeSingle(),
+      admin
+        .from('flow_nodes')
+        .select('*')
+        .eq('flow_id', id)
+        .order('created_at', { ascending: true }),
+    ])
+    return NextResponse.json({ flow, nodes: nodes ?? [] })
+  } catch (err) {
+    return toErrorResponse(err)
+  }
 }
 
 export async function DELETE(
@@ -177,18 +136,21 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id } = await context.params
-  const guard = await requireOwnership(id)
-  if (!guard.ok) return NextResponse.json(guard.body, { status: guard.status })
+  try {
+    const ctx = await requireFeature('flows', 'agent')
 
-  // CASCADE on flow_nodes / flow_runs / flow_run_events handles the
-  // children. Active runs end abruptly — there's no graceful "drain"
-  // mechanism in v1, but that's intentional: deleting a flow is a
-  // deliberate destructive action and the partial unique index will
-  // free up the contact for new triggers immediately.
-  const { error } = await supabaseAdmin().from('flows').delete().eq('id', id)
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    // Ownership check via RLS before delete
+    const { data: exists } = await ctx.supabase
+      .from('flows')
+      .select('id')
+      .eq('id', id)
+      .maybeSingle()
+    if (!exists) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const { error } = await supabaseAdmin().from('flows').delete().eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    return toErrorResponse(err)
   }
-  return NextResponse.json({ ok: true })
 }
-

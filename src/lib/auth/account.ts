@@ -288,3 +288,27 @@ export async function requireActiveSubscription(
   }
   return ctx;
 }
+
+/**
+ * Like `requireActiveSubscription`, but also asserts the account's plan
+ * includes `featureKey` (e.g. `"automations"`, `"flows"`).
+ *
+ * Feature flags live in `subscription_plans.features` JSONB. A missing key
+ * is treated as allowed (so old plans without the key don't break); only an
+ * explicit `false` value blocks access.
+ *
+ * Throws `ForbiddenError` (403) when the feature is off for this plan.
+ */
+export async function requireFeature(
+  featureKey: string,
+  min: AccountRole = "agent",
+): Promise<AccountContext> {
+  const ctx = await requireActiveSubscription(min);
+  const allowed = ctx.subscription.plan?.features[featureKey];
+  if (allowed === false) {
+    throw new ForbiddenError(
+      `Tu plan no incluye acceso a '${featureKey}'. Actualiza tu suscripción para usarlo.`,
+    );
+  }
+  return ctx;
+}

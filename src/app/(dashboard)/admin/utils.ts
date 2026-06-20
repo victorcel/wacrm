@@ -1,5 +1,20 @@
 // Small shared helpers for the /admin UI.
 
+/** Payment methods commonly used in Colombia, ordered by popularity. */
+export const PAYMENT_METHODS = [
+  { value: "nequi", label: "Nequi" },
+  { value: "daviplata", label: "Daviplata" },
+  { value: "pse", label: "PSE" },
+  { value: "bancolombia", label: "Bancolombia en línea" },
+  { value: "transferencia", label: "Transferencia bancaria" },
+  { value: "consignacion", label: "Consignación bancaria" },
+  { value: "efecty", label: "Efecty" },
+  { value: "baloto", label: "Baloto" },
+  { value: "tarjeta_credito", label: "Tarjeta de crédito" },
+  { value: "tarjeta_debito", label: "Tarjeta débito" },
+  { value: "efectivo", label: "Efectivo" },
+] as const;
+
 /**
  * Turn a <input type="date"> value (YYYY-MM-DD) into an ISO timestamp
  * at the end of that local day, so "paid until June 30" stays active

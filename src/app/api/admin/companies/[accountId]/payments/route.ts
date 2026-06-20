@@ -1,12 +1,14 @@
 // ============================================================
-// POST /api/admin/companies/[accountId]/payments
+// /api/admin/companies/[accountId]/payments
 //
-// Platform super-admin only. Record a manual payment (transfer /
-// cash / card) for a company and roll the subscription forward:
-// the payment's `periodEnd` becomes the new "paid-until" date and
-// the subscription is (re)activated.
+// Platform super-admin only.
 //
-//   { amount, periodEnd, currency?, method?, note?, planId? }
+//   GET  — list all payments for a company (newest first).
+//   POST — record a manual payment and roll the subscription
+//          forward: the payment's `periodEnd` becomes the new
+//          "paid-until" date and the subscription is (re)activated.
+//
+//          POST body: { amount, periodEnd, currency?, method?, note?, planId? }
 // ============================================================
 
 import { NextResponse } from "next/server";
@@ -24,6 +26,49 @@ function asNumber(v: unknown): number | null {
     return Number(v);
   }
   return null;
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ accountId: string }> },
+) {
+  try {
+    const { admin } = await requirePlatformAdmin();
+    const { accountId } = await params;
+
+    const { data, error } = await admin
+      .from("subscription_payments")
+      .select(
+        "id, amount, currency, method, paid_at, period_start, period_end, note, created_at, plan:subscription_plans(name)",
+      )
+      .eq("account_id", accountId)
+      .order("paid_at", { ascending: false });
+
+    if (error) {
+      console.error("[GET .../payments] error:", error);
+      return NextResponse.json({ error: "Failed to load payments" }, { status: 500 });
+    }
+
+    const payments = (data ?? []).map((p) => {
+      const planRow = Array.isArray(p.plan) ? p.plan[0] : p.plan;
+      return {
+        id: p.id,
+        amount: p.amount,
+        currency: p.currency,
+        method: p.method,
+        paidAt: p.paid_at,
+        periodStart: p.period_start,
+        periodEnd: p.period_end,
+        note: p.note,
+        createdAt: p.created_at,
+        planName: planRow?.name ?? null,
+      };
+    });
+
+    return NextResponse.json({ payments });
+  } catch (err) {
+    return toErrorResponse(err);
+  }
 }
 
 export async function POST(

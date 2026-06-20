@@ -20,6 +20,7 @@ import {
 
 import { useCan } from "@/hooks/use-can";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { GatedButton } from "@/components/ui/gated-button";
 import {
   Dialog,
@@ -90,6 +91,7 @@ export default function FlowsPage() {
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [templates, setTemplates] = useState<TemplateSummary[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<FlowRow | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,10 +178,13 @@ export default function FlowsPage() {
   }
 
   async function handleDelete(flow: FlowRow) {
-    const yes = window.confirm(
-      `¿Eliminar "${flow.name}"? Cualquier ejecución activa terminará inmediatamente.`,
-    );
-    if (!yes) return;
+    setDeleteTarget(flow);
+  }
+
+  async function confirmDelete() {
+    const flow = deleteTarget;
+    if (!flow) return;
+    setDeleteTarget(null);
     try {
       const res = await fetch(`/api/flows/${flow.id}`, { method: "DELETE" });
       if (!res.ok) throw new Error(`No se pudo eliminar: ${res.status}`);
@@ -318,6 +323,17 @@ export default function FlowsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={() => setDeleteTarget(null)}
+        title={deleteTarget ? `¿Eliminar "${deleteTarget.name}"?` : ""}
+        description="Cualquier ejecución activa terminará inmediatamente. Esta acción no se puede deshacer."
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        destructive
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

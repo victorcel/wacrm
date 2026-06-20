@@ -73,6 +73,26 @@ export async function PATCH(
       );
     }
 
+    // When suspending, immediately revoke all active sessions for every
+    // member of this account. This prevents users from continuing to
+    // operate while their subscription is inactive — their current page
+    // will keep working until they navigate or refresh, at which point
+    // the expired session forces a redirect to /suspended.
+    if (update.status === "suspended") {
+      const { error: revokeErr } = await ctx.admin.rpc(
+        "revoke_account_sessions",
+        { p_account_id: accountId },
+      );
+      if (revokeErr) {
+        // Non-fatal: the subscription is already suspended. Log the
+        // error but return 200 — the gate will block access anyway.
+        console.error(
+          "[PATCH subscription] session revocation failed:",
+          revokeErr,
+        );
+      }
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     return toErrorResponse(err);

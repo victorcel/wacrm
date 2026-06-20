@@ -69,7 +69,7 @@ function LoginPageInner() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="items-center text-center">
+        <CardHeader className="justify-items-center text-center">
           <BrandWordmark className="mx-auto mb-3 block h-9 w-auto" />
           <CardTitle className="text-xl text-foreground">
             {inviteToken ? "Inicia sesión para aceptar" : "Bienvenido de nuevo"}

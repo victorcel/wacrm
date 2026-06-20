@@ -8,10 +8,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false, nocache: true },
 };
 
-// Server guard for the whole /admin area. Only platform super-admins
-// get in; everyone else (no session, or a normal account user) is
-// bounced to /login. The API routes under /api/admin enforce the same
-// check independently, so this is the UI-level gate.
+// Secondary guard for the /admin area. The (dashboard) parent layout
+// already checks isPlatformAdmin() via getCurrentAccount(); this adds
+// an explicit hard-stop so non-platform-admins can never reach these
+// routes even if the parent gate is bypassed.
 export default async function AdminLayout({
   children,
 }: {
@@ -23,5 +23,5 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  return <div className="min-h-screen bg-background">{children}</div>;
+  return <>{children}</>;
 }

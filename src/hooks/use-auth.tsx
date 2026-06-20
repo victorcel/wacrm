@@ -67,6 +67,19 @@ interface AuthContextValue {
    *  the settings form so header/sidebar reflect the change without a
    *  full page reload. */
   refreshProfile: () => Promise<void>;
+  /**
+   * Feature flags from the account's subscription plan.
+   * e.g. `{ automations: true, flows: false }`.
+   * Empty object while loading or when the plan has no flags set.
+   * A missing key is treated as allowed (whitelisted); only explicit
+   * `false` means "not in this plan."
+   */
+  planFeatures: Record<string, boolean>;
+  /**
+   * True when the current user is a platform super-admin (/admin area).
+   * Null while the check is still loading; false once resolved as non-admin.
+   */
+  isPlatformAdmin: boolean | null;
 
   // ----------------------------------------------------------
   // Account-scoped context (added by the account-sharing series)
@@ -114,6 +127,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [account, setAccount] = useState<AccountSummary | null>(null);
+  const [planFeatures, setPlanFeatures] = useState<Record<string, boolean>>({});
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
   // Tracked separately from `loading`. The session settles fast (one
   // local cookie read); the profile fetch crosses the network and
@@ -198,6 +213,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           account_role: accountRole,
         });
         setAccount(accountRow);
+
+        // Fetch plan feature flags and platform-admin status in parallel.
+        // Fire-and-forget: failures keep safe defaults (all features
+        // visible, not a platform admin).
+        if (data.account_id) {
+          void (async () => {
+            try {
+              const { data: subData } = await supabase
+                .from("account_subscriptions")
+                .select("plan:subscription_plans(features)")
+                .eq("account_id", data.account_id)
+                .maybeSingle();
+              const planRow = subData?.plan
+                ? Array.isArray(subData.plan)
+                  ? subData.plan[0]
+                  : subData.plan
+                : null;
+              setPlanFeatures(
+                (planRow?.features as Record<string, boolean>) ?? {},
+              );
+            } catch {
+              // keep empty {} on error
+            }
+          })();
+
+          // Check platform admin via API (avoids needing the service-role key client-side).
+          void fetch("/api/admin/me")
+            .then((r) => setIsPlatformAdmin(r.ok))
+            .catch(() => setIsPlatformAdmin(false));
+        }
       }
     } catch (err) {
       console.error("[AuthProvider] fetchProfile threw:", err);
@@ -265,6 +310,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null);
         setAccount(null);
+        setPlanFeatures({});
+        setIsPlatformAdmin(null);
         setProfileLoading(false);
       }
 
@@ -284,6 +331,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setProfile(null);
     setAccount(null);
+    setPlanFeatures({});
+    setIsPlatformAdmin(null);
     window.location.href = "/login";
   }, []);
 
@@ -322,6 +371,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshProfile,
         account,
         defaultCurrency: account?.default_currency ?? DEFAULT_CURRENCY,
+        planFeatures,
+        isPlatformAdmin,
         ...derived,
       }}
     >
@@ -352,6 +403,8 @@ export function useAuth(): AuthContextValue {
       refreshProfile: async () => {},
       account: null,
       defaultCurrency: DEFAULT_CURRENCY,
+      planFeatures: {},
+      isPlatformAdmin: null,
       accountId: null,
       accountRole: null,
       isOwner: false,

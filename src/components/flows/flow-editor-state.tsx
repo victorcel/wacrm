@@ -52,6 +52,7 @@ import {
 import { unlinkNodeReferences } from "@/lib/flows/edges";
 import type { FlowNodeRow, FlowRow } from "@/lib/flows/types";
 import { NODE_META, slugify, type BuilderNode, type NodeType } from "./shared";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 // ============================================================
 // State shape
@@ -105,7 +106,7 @@ export interface FlowEditorContextValue {
   // Actions
   save: () => Promise<void>;
   setStatus: (status: BuilderState["status"]) => Promise<void>;
-  deleteFlow: () => Promise<void>;
+  deleteFlow: () => void;
 
   /**
    * Transient "look here" signal. Set when the validation panel's
@@ -256,6 +257,7 @@ export function FlowEditorProvider({
 
   const [saving, setSaving] = useState(false);
   const [activating, setActivating] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(false);
   // dirty flips on user edits; status-only updates (after the activate
   // API succeeds) use setStateRaw so they don't falsely re-flag the
   // form as dirty.
@@ -399,11 +401,12 @@ export function FlowEditorProvider({
   );
 
   // ---- Delete ----
-  const deleteFlow = useCallback(async () => {
-    const yes = window.confirm(
-      `Delete "${state.name}"? Any active runs end immediately. This can't be undone.`,
-    );
-    if (!yes) return;
+  const deleteFlow = useCallback(() => {
+    setPendingDelete(true);
+  }, []);
+
+  const confirmDeleteFlow = useCallback(async () => {
+    setPendingDelete(false);
     try {
       const res = await fetch(`/api/flows/${initialFlow.id}`, {
         method: "DELETE",
@@ -414,7 +417,11 @@ export function FlowEditorProvider({
       const msg = err instanceof Error ? err.message : "Delete failed";
       toast.error(msg);
     }
-  }, [initialFlow.id, router, state.name]);
+  }, [initialFlow.id, router]);
+
+  const cancelDeleteFlow = useCallback(() => {
+    setPendingDelete(false);
+  }, []);
 
   // ---- Node mutations ----
   const updateNode = useCallback(
@@ -561,5 +568,18 @@ export function FlowEditorProvider({
     ],
   );
 
-  return <FlowEditorCtx.Provider value={value}>{children}</FlowEditorCtx.Provider>;
+  return (
+    <FlowEditorCtx.Provider value={value}>
+      {children}
+      <ConfirmDialog
+        open={pendingDelete}
+        onOpenChange={cancelDeleteFlow}
+        title={`Delete "${state.name}"?`}
+        description="Any active runs end immediately. This can't be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={confirmDeleteFlow}
+      />
+    </FlowEditorCtx.Provider>
+  );
 }

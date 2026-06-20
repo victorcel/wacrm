@@ -344,6 +344,24 @@ export function useBroadcastSending(): UseBroadcastSendingReturn {
         throw new Error('No contacts found for this audience.');
       }
 
+      // ── Step 1b: Check broadcast limit before creating the row ─────
+      // The API also enforces this, but checking here prevents orphaned
+      // broadcasts rows from counting toward next month's quota.
+      const usageRes = await fetch('/api/account/subscription-usage');
+      if (usageRes.ok) {
+        const usage = await usageRes.json() as {
+          broadcasts: { thisMonth: number; max: number | null };
+        };
+        if (
+          usage.broadcasts.max !== null &&
+          usage.broadcasts.thisMonth >= usage.broadcasts.max
+        ) {
+          throw new Error(
+            `Has alcanzado el límite de ${usage.broadcasts.max} difusión${usage.broadcasts.max === 1 ? '' : 'es'} este mes. Contacta con el administrador para actualizar tu plan.`,
+          );
+        }
+      }
+
       // ── Step 2: Create broadcast row ──────────────────────────────
       setProgress(10);
       const { data: broadcast, error: broadcastError } = await supabase
