@@ -22,13 +22,27 @@ De **Project Settings → API** copiar:
 ## 3. Migraciones
 
 ```bash
-# CLI (recomendado)
+# CLI (recomendado — y obligatorio para este proyecto)
 brew install supabase/tap/supabase
 supabase link --project-ref uuqgwnkaiwgztvaxytjj
 supabase db push
 ```
 
-O ejecutar cada archivo de `supabase/migrations/` en orden (001 → 024) desde **SQL Editor**.
+Para subir solo migraciones nuevas después del setup inicial:
+
+```bash
+supabase db push
+```
+
+Las migraciones van actualmente de **001 → 029** (`supabase/migrations/`).
+
+> ⚠️ **Nunca dupliques el número de prefijo.** Supabase rastrea cada migración por el número del prefijo (`024`, `025`…), **no** por el nombre completo ni por hash. Si dos archivos comparten número (p. ej. `024_member_presence.sql` y `024_subscriptions.sql`), el remoto registra solo uno y **salta el otro en silencio** — la tabla, RPC o policy de ese archivo nunca se crea aunque `migration list` muestre el número como aplicado. Antes de hacer push, verifica que no haya prefijos repetidos:
+>
+> ```bash
+> ls supabase/migrations | cut -d_ -f1 | sort | uniq -d   # no debe imprimir nada
+> ```
+>
+> Si vas a numerar una migración nueva, usa el siguiente número libre (no reutilices uno que pudo aplicarse en otra rama).
 
 ## 4. Storage
 
@@ -87,9 +101,10 @@ Plan Pro incluye PITR y backups diarios automáticos.
 
 | Error | Causa | Solución |
 |---|---|---|
-| `relation does not exist` | Migraciones no aplicadas | `supabase db push` o ejecutar SQL en orden |
+| `relation does not exist` | Migraciones no aplicadas | `supabase db push` (no ejecutar SQL manualmente) |
 | `violates row-level security` | RLS bloquea | Verificar sesión activa o usar admin client |
 | `Auth session missing` | Cookie de sesión no llega | Revisar `middleware.ts` y proxy/cookies |
 | `JWSInvalidSignature` | JWT mismatch | Actualizar env vars al proyecto correcto |
 | Webhook 401 | `META_APP_SECRET` incorrecto | Verificar App Secret en Meta for Developers |
 | Migraciones no suben | CLI no linkeado | `supabase link --project-ref [REF]` |
+| Número de migración registrado pero el objeto no existe (tabla/RPC ausente aunque `migration list` lo marca aplicado) | Prefijo duplicado: otra migración con el mismo número se aplicó primero y esta se saltó | Marca el número como revertido y vuelve a aplicar (las migraciones son idempotentes): `supabase migration repair --status reverted <NNN>` y luego `supabase db push --include-all` |
