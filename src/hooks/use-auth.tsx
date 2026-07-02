@@ -7,6 +7,7 @@ import {
   useState,
   useCallback,
   useMemo,
+  useRef,
   type ReactNode,
 } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -136,12 +137,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // window they're in — see the type doc above.
   const [profileLoading, setProfileLoading] = useState(true);
 
+  // Tracks the user ID we've successfully initiated/completed fetching
+  // a profile for. This prevents redundant re-fetches and toggling
+  // profileLoading back to true on window focus events/token refresh.
+  const lastFetchedUserIdRef = useRef<string | null>(null);
+
   // Shared across init, auth-state-change listener, and the exposed
   // refreshProfile() callback. Reads the current session's user id and
   // pulls the matching profile row along with its account summary.
   const fetchProfile = useCallback(async (userId: string) => {
     const supabase = createClient();
     setProfileLoading(true);
+    lastFetchedUserIdRef.current = userId;
     try {
       const { data, error } = await supabase
         .from("profiles")
@@ -158,6 +165,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           hint: error.hint,
           code: error.code,
         });
+        lastFetchedUserIdRef.current = null;
         return;
       }
 
@@ -221,39 +229,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           account_role: accountRole,
         });
         setAccount(accountRow);
-
-        // Fetch plan feature flags and platform-admin status in parallel.
-        // Fire-and-forget: failures keep safe defaults (all features
-        // visible, not a platform admin).
-        if (data.account_id) {
-          void (async () => {
-            try {
-              const { data: subData } = await supabase
-                .from("account_subscriptions")
-                .select("plan:subscription_plans(features)")
-                .eq("account_id", data.account_id)
-                .maybeSingle();
-              const planRow = subData?.plan
-                ? Array.isArray(subData.plan)
-                  ? subData.plan[0]
-                  : subData.plan
-                : null;
-              setPlanFeatures(
-                (planRow?.features as Record<string, boolean>) ?? {},
-              );
-            } catch {
-              // keep empty {} on error
-            }
-          })();
-
-          // Check platform admin via API (avoids needing the service-role key client-side).
-          void fetch("/api/admin/me")
-            .then((r) => setIsPlatformAdmin(r.ok))
-            .catch(() => setIsPlatformAdmin(false));
-        }
+      } else {
+        lastFetchedUserIdRef.current = null;
       }
     } catch (err) {
       console.error("[AuthProvider] fetchProfile threw:", err);
+      lastFetchedUserIdRef.current = null;
     } finally {
       setProfileLoading(false);
     }
@@ -314,8 +295,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(currentUser);
 
       if (currentUser) {
-        fetchProfile(currentUser.id);
+        if (currentUser.id !== lastFetchedUserIdRef.current) {
+          fetchProfile(currentUser.id);
+        }
       } else {
+        lastFetchedUserIdRef.current = null;
         setProfile(null);
         setAccount(null);
         setPlanFeatures({});
