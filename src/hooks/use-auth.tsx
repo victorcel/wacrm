@@ -229,6 +229,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           account_role: accountRole,
         });
         setAccount(accountRow);
+
+        // Check platform admin via API (avoids needing the service-role key client-side).
+        void fetch("/api/admin/me")
+          .then((r) => setIsPlatformAdmin(r.ok))
+          .catch(() => setIsPlatformAdmin(false));
+
+        // Fetch plan feature flags. Fire-and-forget: failures keep the
+        // safe default ({}), which reads as "all features allowed".
+        if (data.account_id) {
+          void (async () => {
+            try {
+              const { data: subData } = await supabase
+                .from("account_subscriptions")
+                .select("plan:subscription_plans(features)")
+                .eq("account_id", data.account_id)
+                .maybeSingle();
+              const planRow = subData?.plan
+                ? Array.isArray(subData.plan)
+                  ? subData.plan[0]
+                  : subData.plan
+                : null;
+              setPlanFeatures(
+                (planRow?.features as Record<string, boolean>) ?? {},
+              );
+            } catch {
+              // keep empty {} on error
+            }
+          })();
+        }
       } else {
         lastFetchedUserIdRef.current = null;
       }
