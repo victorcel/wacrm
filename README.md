@@ -5,6 +5,84 @@
   </picture>
 </p>
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-violet.svg)](./LICENSE)
+[![CI](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml/badge.svg)](https://github.com/ArnasDon/wacrm/actions/workflows/ci.yml)
+[![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)](https://nextjs.org)
+[![Supabase](https://img.shields.io/badge/Supabase-Postgres%20%2B%20Auth-3ecf8e?logo=supabase)](https://supabase.com)
+[![Stars](https://img.shields.io/github/stars/ArnasDon/wacrm?style=social)](https://github.com/ArnasDon/wacrm/stargazers)
+
+The marketing site and self-host docs live in a separate repo:
+[ArnasDon/wacrm-site](https://github.com/ArnasDon/wacrm-site)
+([wacrm.tech](https://wacrm.tech)). This repo is the product —
+clone or fork it to run your own CRM.
+
+## What you get out of the box
+
+- **Shared inbox** on the official WhatsApp Business API — multiple
+  agents working one number, per-conversation assignment, status, and
+  notes.
+- **Contacts + tags + custom fields**, CSV import, deduplication.
+- **Sales pipelines** (Kanban) with deals linked to conversations.
+- **Broadcasts** with Meta-approved templates, delivery + read
+  tracking, per-recipient variable substitution.
+- **No-code automations** — triggers on inbound messages, new
+  contacts, keywords, or schedule; conditional branches, waits,
+  tags, webhooks. Visual builder.
+- **AI reply assistant** — bring your own OpenAI or Anthropic key
+  (stored encrypted; no per-seat AI fee, your data stays yours).
+  One-click AI-drafted replies in the inbox, plus an optional
+  auto-reply bot with a per-conversation cap and clean human handoff.
+  Add a **knowledge base** (FAQs, policies, product docs) and it
+  answers from your own content — hybrid retrieval (Postgres full-text,
+  or semantic pgvector when an embeddings key is set).
+- **Real-time dashboard** — response times, daily volume, pipeline
+  value, cross-module activity feed.
+- **Team accounts** — invite teammates by link, role-based access
+  (owner / admin / agent / viewer), ownership transfer. Every install
+  is account-scoped, so one shared inbox can be staffed by a whole
+  team. Solo use stays single-user with zero setup.
+- **Account management** — email, password, avatar, global sign-out.
+- **Public REST API** (`/api/v1`) with scoped, revocable API keys —
+  build your own automations on top of your CRM. See
+  [docs/public-api.md](./docs/public-api.md).
+
+## Why fork this?
+
+This is a **template**, not a product. Forking means you get:
+
+- **Full ownership** — your code, your Supabase project, your domain,
+  your data. No SaaS lock-in, no seat pricing, no trust dance.
+- **Full customisation** — add the fields your team needs, remove the
+  modules you don't, redesign anything. The stack is boring on
+  purpose (Next.js + Supabase + Tailwind) so the learning curve is
+  short.
+- **Zero ops to start** — [Hostinger](https://www.hostinger.com/web-apps-hosting)
+  Managed Node.js deploys a fork in a few clicks. No Docker, no
+  Kubernetes, no infra team needed.
+  ([See below ↓](#-deploy-on-hostinger-recommended))
+- **Real security primitives** — token encryption (AES-256-GCM), RLS
+  on every table, HMAC-verified webhooks, CSP, rate limiting, CI
+  typecheck/build on every PR.
+
+Not a framework. Not an SDK. A concrete, working CRM you can stand up
+in an afternoon and make yours.
+
+## Quick start
+
+```bash
+# Fork on GitHub first: https://github.com/ArnasDon/wacrm → Fork
+git clone https://github.com/<your-username>/wacrm.git
+cd wacrm
+npm install
+cp .env.local.example .env.local   # fill in Supabase + Meta creds
+npm run dev
+```
+
+Open <http://localhost:3000>. You'll be redirected to `/login` (or
+`/dashboard` if already signed in).
+
+## 🚀 Deploy on Hostinger (recommended)
+
 <p align="center">
   <strong>CRM autoalojable para WhatsApp®</strong><br>
   Bandeja compartida, contactos, embudos de venta, difusiones y

@@ -10,6 +10,7 @@ import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import {
   Bell,
+  Bot,
   Crown,
   GitBranch,
   LayoutDashboard,
@@ -105,6 +106,7 @@ const navItems: NavItem[] = [
   { href: "/broadcasts", label: "Difusiones", icon: Radio, featureKey: "broadcasts" },
   { href: "/automations", label: "Automatizaciones", icon: Zap, featureKey: "automations" },
   { href: "/flows", label: "Flujos", icon: Workflow, beta: true, featureKey: "flows" },
+  { href: "/agents", label: "AI Agents", icon: Bot },
 ];
 
 const bottomNavItems = [
