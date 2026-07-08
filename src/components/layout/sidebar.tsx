@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
@@ -18,6 +19,7 @@ import {
   Radio,
   Settings,
   Shield,
+  ShieldCheck,
   User,
   UserCog,
   Users,
@@ -87,17 +89,23 @@ interface NavItem {
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
+  /**
+   * When set, the item is hidden if `planFeatures[featureKey] === false`.
+   * A missing key (undefined) is treated as allowed so plans without the
+   * key don't accidentally hide items.
+   */
+  featureKey?: string;
 }
 
 const navItems: NavItem[] = [
   { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
-  { href: "/inbox", labelKey: "inbox", icon: MessageSquare },
+  { href: "/inbox", labelKey: "inbox", icon: MessageSquare, featureKey: "inbox" },
   { href: "/notifications", labelKey: "notifications", icon: Bell },
-  { href: "/contacts", labelKey: "contacts", icon: Users },
-  { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
-  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
-  { href: "/automations", labelKey: "automations", icon: Zap },
-  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
+  { href: "/contacts", labelKey: "contacts", icon: Users, featureKey: "contacts" },
+  { href: "/pipelines", labelKey: "pipelines", icon: GitBranch, featureKey: "pipelines" },
+  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio, featureKey: "broadcasts" },
+  { href: "/automations", labelKey: "automations", icon: Zap, featureKey: "automations" },
+  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true, featureKey: "flows" },
   { href: "/agents", labelKey: "aiAgents", icon: Bot },
 ];
 
@@ -116,9 +124,14 @@ import { useTranslations } from "next-intl";
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
-  const { profile, profileLoading, account, accountRole, signOut } = useAuth();
+  const { profile, profileLoading, account, accountRole, signOut, planFeatures, isPlatformAdmin } = useAuth();
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
+  // Only show nav items whose feature flag is not explicitly false.
+  // While planFeatures is loading ({}) every item is visible (missing key = allowed).
+  const visibleNavItems = navItems.filter(
+    (item) => !item.featureKey || planFeatures[item.featureKey] !== false,
+  );
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -188,11 +201,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <MessageSquare className="h-4 w-4" />
-            </div>
-            <span className="text-sm font-semibold text-foreground">
-              {t("title")}
+            <Image
+              src="/brand/icon-mark.png"
+              alt=""
+              width={32}
+              height={32}
+              className="h-8 w-8 shrink-0"
+              priority
+            />
+            <span className="text-sm font-semibold tracking-tight text-foreground">
+              TRAFIKOS
             </span>
           </Link>
           <button
@@ -208,7 +226,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -290,6 +308,22 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 </li>
               );
             })}
+            {isPlatformAdmin && (
+              <li>
+                <Link
+                  href="/admin"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
+                    pathname.startsWith("/admin")
+                      ? "bg-amber-500/10 text-amber-300"
+                      : "text-amber-400/70 hover:bg-amber-500/10 hover:text-amber-300",
+                  )}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  {t("adminPanel")}
+                </Link>
+              </li>
+            )}
           </ul>
         </nav>
 

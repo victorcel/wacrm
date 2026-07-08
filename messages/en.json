@@ -15,7 +15,6 @@
     "createAccount": "Create account"
   },
   "Sidebar": {
-    "title": "CRM Template for WhatsApp",
     "dashboard": "Dashboard",
     "inbox": "Inbox",
     "notifications": "Notifications",
@@ -26,6 +25,7 @@
     "flows": "Flows",
     "aiAgents": "AI Agents",
     "settings": "Settings",
+    "adminPanel": "Admin Panel",
     "beta": "Beta",
     "unreadConversations": "{count} unread {count, plural, =1 {conversation} other {conversations}}",
     "unreadNotifications": "{count} unread {count, plural, =1 {notification} other {notifications}}",
@@ -348,10 +348,7 @@
         "activity": "Activity",
         "notes": "Notes",
         "custom": "Custom Fields",
-        "deals": "Deals",
-      "noTags": "No tags",
-      "noDeals": "No deals",
-      "addNotePlaceholder": "Add a note..."
+        "deals": "Deals"
       },
       "actions": {
         "edit": "Edit",
@@ -1485,6 +1482,7 @@
       "fields": "Fields & tags",
       "deals": "Deals & currency",
       "members": "Team members",
+      "subscription": "Subscription",
       "api": "API keys"
     },
     "groups": {
@@ -1606,6 +1604,26 @@
       "saving": "Saving...",
       "saveFailed": "Failed to save default currency",
       "saveSuccess": "Default currency updated"
+    },
+    "subscription": {
+      "title": "Subscription",
+      "description": "Active plan, usage limits, and your workspace's renewal date.",
+      "status": {
+        "active": "Active",
+        "trialing": "Trial period",
+        "suspended": "Suspended",
+        "expired": "Expired",
+        "inactive": "Inactive"
+      },
+      "currentPlan": "Current plan",
+      "validUntil": "Valid until: ",
+      "noExpiration": "No expiration",
+      "planUsage": "Plan usage",
+      "seatsLabel": "Seats (members)",
+      "broadcastsLabel": "Broadcasts this month",
+      "unlimited": "Unlimited",
+      "loadError": "Could not load subscription information.",
+      "noData": "No data"
     },
     "aiConfig": {
       "title": "Agent setup",

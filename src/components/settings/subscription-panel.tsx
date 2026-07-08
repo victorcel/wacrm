@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Loader2 } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -19,47 +20,32 @@ interface UsageData {
   broadcasts: { thisMonth: number; max: number | null };
 }
 
-const STATUS_META: Record<string, { label: string; className: string }> = {
-  active: {
-    label: 'Activa',
-    className: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400',
-  },
-  trialing: {
-    label: 'Período de prueba',
-    className: 'border-blue-500/40 bg-blue-500/10 text-blue-400',
-  },
-  suspended: {
-    label: 'Suspendida',
-    className: 'border-destructive/40 bg-destructive/10 text-destructive',
-  },
-  expired: {
-    label: 'Vencida',
-    className: 'border-orange-500/40 bg-orange-500/10 text-orange-400',
-  },
-  inactive: {
-    label: 'Inactiva',
-    className: 'border-border bg-muted text-muted-foreground',
-  },
+const STATUS_KEYS: Record<string, string> = {
+  active: 'active',
+  trialing: 'trialing',
+  suspended: 'suspended',
+  expired: 'expired',
+  inactive: 'inactive',
 };
 
-function formatDate(iso: string | null): string {
-  if (!iso) return 'Sin vencimiento';
-  const d = new Date(iso);
-  return d.toLocaleDateString('es', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-}
+const STATUS_CLASSNAMES: Record<string, string> = {
+  active: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400',
+  trialing: 'border-blue-500/40 bg-blue-500/10 text-blue-400',
+  suspended: 'border-destructive/40 bg-destructive/10 text-destructive',
+  expired: 'border-orange-500/40 bg-orange-500/10 text-orange-400',
+  inactive: 'border-border bg-muted text-muted-foreground',
+};
 
 function UsageBar({
   label,
   used,
   max,
+  unlimitedLabel,
 }: {
   label: string;
   used: number;
   max: number | null;
+  unlimitedLabel: string;
 }) {
   const percent = max !== null && max > 0 ? Math.min((used / max) * 100, 100) : null;
   const nearLimit = percent !== null && percent >= 80;
@@ -69,7 +55,7 @@ function UsageBar({
       <div className="flex items-center justify-between text-sm">
         <span className="font-medium text-foreground">{label}</span>
         <span className="text-muted-foreground">
-          {used} / {max !== null ? max : 'Ilimitado'}
+          {used} / {max !== null ? max : unlimitedLabel}
         </span>
       </div>
       {percent !== null && (
@@ -87,6 +73,7 @@ function UsageBar({
 }
 
 export function SubscriptionPanel() {
+  const t = useTranslations('Settings.subscription');
   const [data, setData] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,14 +91,24 @@ export function SubscriptionPanel() {
       })
       .catch(() => {
         if (!cancelled) {
-          setError('No se pudo cargar la información de suscripción.');
+          setError(t('loadError'));
           setLoading(false);
         }
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t]);
+
+  function formatDate(iso: string | null): string {
+    if (!iso) return t('noExpiration');
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  }
 
   if (loading) {
     return (
@@ -124,18 +121,19 @@ export function SubscriptionPanel() {
   if (error || !data) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
-        {error ?? 'Sin datos'}
+        {error ?? t('noData')}
       </p>
     );
   }
 
-  const statusInfo = STATUS_META[data.status] ?? STATUS_META.inactive;
+  const statusKey = STATUS_KEYS[data.status] ?? 'inactive';
+  const statusClassName = STATUS_CLASSNAMES[statusKey];
 
   return (
     <div className="space-y-6">
       <SettingsPanelHead
-        title="Suscripción"
-        description="Plan activo, límites de uso y fecha de renovación de tu espacio de trabajo."
+        title={t('title')}
+        description={t('description')}
       />
 
       {/* Plan summary card */}
@@ -143,37 +141,39 @@ export function SubscriptionPanel() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Plan actual
+              {t('currentPlan')}
             </p>
             <p className="mt-1 text-lg font-bold text-foreground">
               {data.plan?.name ?? '—'}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Badge className={statusInfo.className}>{statusInfo.label}</Badge>
+            <Badge className={statusClassName}>{t(`status.${statusKey}`)}</Badge>
           </div>
         </div>
 
         <div className="text-sm text-muted-foreground">
-          <span className="font-medium text-foreground">Válido hasta: </span>
+          <span className="font-medium text-foreground">{t('validUntil')}</span>
           {formatDate(data.periodEnd)}
         </div>
       </div>
 
       {/* Usage card */}
       <div className="rounded-lg border border-border bg-card p-5 space-y-5">
-        <p className="text-sm font-semibold text-foreground">Uso del plan</p>
+        <p className="text-sm font-semibold text-foreground">{t('planUsage')}</p>
 
         <UsageBar
-          label="Asientos (miembros)"
+          label={t('seatsLabel')}
           used={data.seats.used}
           max={data.seats.max}
+          unlimitedLabel={t('unlimited')}
         />
 
         <UsageBar
-          label="Difusiones este mes"
+          label={t('broadcastsLabel')}
           used={data.broadcasts.thisMonth}
           max={data.broadcasts.max}
+          unlimitedLabel={t('unlimited')}
         />
       </div>
     </div>
