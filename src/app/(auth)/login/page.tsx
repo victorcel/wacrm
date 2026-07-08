@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +15,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { BrandWordmark } from "@/components/brand-wordmark";
+import { MessageSquare, UsersRound } from "lucide-react";
 
 // `useSearchParams` opts the component out of static prerendering
 // unless it sits under a Suspense boundary. We split the form into
@@ -35,6 +36,7 @@ function LoginPageInner() {
   // account. After a successful sign-in we send them to the join
   // page to accept rather than to /dashboard.
   const inviteToken = searchParams.get("invite");
+  const t = useTranslations("LoginPage");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -69,15 +71,21 @@ function LoginPageInner() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="justify-items-center text-center">
-          <BrandWordmark className="mx-auto mb-3 block h-9 w-auto" />
+        <CardHeader className="items-center text-center">
+          <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+            {inviteToken ? (
+              <UsersRound className="h-6 w-6 text-primary" />
+            ) : (
+              <MessageSquare className="h-6 w-6 text-primary" />
+            )}
+          </div>
           <CardTitle className="text-xl text-foreground">
-            {inviteToken ? "Inicia sesión para aceptar" : "Bienvenido de nuevo"}
+            {inviteToken ? t('titleAccept') : t('titleWelcome')}
           </CardTitle>
           <CardDescription className="text-muted-foreground">
             {inviteToken
-              ? "Inicia sesión y te llevaremos a la invitación."
-              : "Inicia sesión en tu cuenta"}
+              ? t('descAccept')
+              : t('descWelcome')}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -90,12 +98,12 @@ function LoginPageInner() {
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="email" className="text-muted-foreground">
-                Correo electrónico
+                {t('emailLabel')}
               </Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder={t('emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -106,19 +114,19 @@ function LoginPageInner() {
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password" className="text-muted-foreground">
-                  Contraseña
+                  {t('passwordLabel')}
                 </Label>
                 <Link
                   href="/forgot-password"
                   className="text-sm text-primary hover:text-primary/80"
                 >
-                  ¿Olvidaste tu contraseña?
+                  {t('forgotPassword')}
                 </Link>
               </div>
               <Input
                 id="password"
                 type="password"
-                placeholder="Introduce tu contraseña"
+                placeholder={t('passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -131,28 +139,23 @@ function LoginPageInner() {
               disabled={loading}
               className="mt-2 h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {loading ? "Iniciando sesión..." : "Iniciar sesión"}
+              {loading ? t('signingIn') : t('signIn')}
             </Button>
           </form>
 
-          {/* Registration is invite-only. The "create account" CTA
-              only appears when accepting an invitation; otherwise new
-              companies are onboarded by the platform admin. */}
-          {inviteToken ? (
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              ¿No tienes una cuenta?{" "}
-              <Link
-                href={`/signup?invite=${encodeURIComponent(inviteToken)}`}
-                className="text-primary hover:text-primary/80"
-              >
-                Crear cuenta y unirse
-              </Link>
-            </p>
-          ) : (
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              El registro es solo por invitación.
-            </p>
-          )}
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            {t('noAccount')}{" "}
+            <Link
+              href={
+                inviteToken
+                  ? `/signup?invite=${encodeURIComponent(inviteToken)}`
+                  : "/signup"
+              }
+              className="text-primary hover:text-primary/80"
+            >
+              {t('createAccount')}
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

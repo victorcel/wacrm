@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
@@ -19,7 +18,6 @@ import {
   Radio,
   Settings,
   Shield,
-  ShieldCheck,
   User,
   UserCog,
   Users,
@@ -36,32 +34,32 @@ import type { AccountRole } from "@/lib/auth/roles";
 // wants to recolour "agent" rows, this is the one diff.
 const ROLE_CHIP: Record<
   AccountRole,
-  { icon: typeof Crown; label: string; className: string }
+  { icon: typeof Crown; labelKey: string; className: string }
 > = {
   owner: {
     icon: Crown,
-    label: "Propietario",
+    labelKey: "roleOwner",
     // Amber: scarce, immutable, "the boss" — gets visual emphasis.
     className:
       "border-amber-500/40 bg-amber-500/10 text-amber-300",
   },
   admin: {
     icon: Shield,
-    label: "Administrador",
+    labelKey: "roleAdmin",
     // Primary-tinted: significant but not as scarce as owner.
     className:
       "border-primary/40 bg-primary/10 text-primary",
   },
   agent: {
     icon: UserCog,
-    label: "Agente",
+    labelKey: "roleAgent",
     // Neutral slate: the operational default.
     className:
       "border-border bg-muted text-foreground",
   },
   viewer: {
     icon: User,
-    label: "Lector",
+    labelKey: "roleViewer",
     // Muted slate: read-only role; visually quieter than agent.
     className:
       "border-border bg-card text-muted-foreground",
@@ -82,35 +80,29 @@ import {
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: string;
   icon: typeof LayoutDashboard;
   /**
    * When true, the nav row renders a small "Beta" chip after the label.
    * Purely informational — doesn't affect routing or access.
    */
   beta?: boolean;
-  /**
-   * When set, the item is hidden if `planFeatures[featureKey] === false`.
-   * A missing key (undefined) is treated as allowed so plans without the
-   * key don't accidentally hide items.
-   */
-  featureKey?: string;
 }
 
 const navItems: NavItem[] = [
-  { href: "/dashboard", label: "Panel", icon: LayoutDashboard },
-  { href: "/inbox", label: "Bandeja de entrada", icon: MessageSquare, featureKey: "inbox" },
-  { href: "/notifications", label: "Notifications", icon: Bell },
-  { href: "/contacts", label: "Contactos", icon: Users, featureKey: "contacts" },
-  { href: "/pipelines", label: "Embudos", icon: GitBranch, featureKey: "pipelines" },
-  { href: "/broadcasts", label: "Difusiones", icon: Radio, featureKey: "broadcasts" },
-  { href: "/automations", label: "Automatizaciones", icon: Zap, featureKey: "automations" },
-  { href: "/flows", label: "Flujos", icon: Workflow, beta: true, featureKey: "flows" },
-  { href: "/agents", label: "AI Agents", icon: Bot },
+  { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
+  { href: "/inbox", labelKey: "inbox", icon: MessageSquare },
+  { href: "/notifications", labelKey: "notifications", icon: Bell },
+  { href: "/contacts", labelKey: "contacts", icon: Users },
+  { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
+  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
+  { href: "/automations", labelKey: "automations", icon: Zap },
+  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
+  { href: "/agents", labelKey: "aiAgents", icon: Bot },
 ];
 
 const bottomNavItems = [
-  { href: "/settings", label: "Configuración", icon: Settings },
+  { href: "/settings", labelKey: "settings", icon: Settings },
 ];
 
 interface SidebarProps {
@@ -119,16 +111,14 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
+import { useTranslations } from "next-intl";
+
 export function Sidebar({ open = false, onClose }: SidebarProps) {
+  const t = useTranslations("Sidebar");
   const pathname = usePathname();
-  const { profile, profileLoading, account, accountRole, signOut, planFeatures, isPlatformAdmin } = useAuth();
+  const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
-  // Only show nav items whose feature flag is not explicitly false.
-  // While planFeatures is loading ({}) every item is visible (missing key = allowed).
-  const visibleNavItems = navItems.filter(
-    (item) => !item.featureKey || planFeatures[item.featureKey] !== false,
-  );
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -173,7 +163,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           part of the main flex row there. */}
       <button
         type="button"
-        aria-label="Cerrar menú"
+        aria-label={t("closeMenu")}
         onClick={onClose}
         className={cn(
           "fixed inset-0 z-30 bg-background/70 backdrop-blur-sm transition-opacity lg:hidden",
@@ -192,28 +182,23 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           // Desktop: static, always visible — reset all the mobile framing.
           "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
         )}
-        aria-label="Principal"
+        aria-label="Primary"
       >
         {/* Logo row. On mobile we put a close button here; on desktop the
             close button is hidden since the sidebar is always-visible. */}
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <Image
-              src="/brand/icon-mark.png"
-              alt=""
-              width={32}
-              height={32}
-              className="h-8 w-8 shrink-0"
-              priority
-            />
-            <span className="text-sm font-semibold tracking-tight text-foreground">
-              TRAFIKOS
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <MessageSquare className="h-4 w-4" />
+            </div>
+            <span className="text-sm font-semibold text-foreground">
+              {t("title")}
             </span>
           </Link>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Cerrar menú"
+            aria-label={t("closeMenu")}
             className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
           >
             <X className="h-5 w-5" />
@@ -223,7 +208,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {visibleNavItems.map((item) => {
+            {navItems.map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));
@@ -251,18 +236,18 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     )}
                   >
                     <item.icon className="h-4 w-4" />
-                    <span className="flex-1">{item.label}</span>
+                    <span className="flex-1">{t(item.labelKey as string)}</span>
                     {item.beta && (
                       <span
-                        aria-label="Función beta"
+                        aria-label={t("beta")}
                         className="rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-300"
                       >
-                        Beta
+                        {t("beta")}
                       </span>
                     )}
                     {showUnreadDot && (
                       <span
-                        aria-label={`${totalUnread} conversación${totalUnread === 1 ? "" : "es"} sin leer`}
+                        aria-label={t("unreadConversations", { count: totalUnread })}
                         className="relative flex h-2 w-2"
                       >
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
@@ -271,7 +256,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     )}
                     {showNotificationBadge && (
                       <span
-                        aria-label={`${unreadNotifications} unread notification${unreadNotifications === 1 ? "" : "s"}`}
+                        aria-label={t("unreadNotifications", { count: unreadNotifications })}
                         className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground"
                       >
                         {unreadNotifications > 9 ? "9+" : unreadNotifications}
@@ -300,27 +285,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                     )}
                   >
                     <item.icon className="h-4 w-4" />
-                    {item.label}
+                    {t(item.labelKey as string)}
                   </Link>
                 </li>
               );
             })}
-            {isPlatformAdmin && (
-              <li>
-                <Link
-                  href="/admin"
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors lg:py-2",
-                    pathname.startsWith("/admin")
-                      ? "bg-amber-500/10 text-amber-300"
-                      : "text-amber-400/70 hover:bg-amber-500/10 hover:text-amber-300",
-                  )}
-                >
-                  <ShieldCheck className="h-4 w-4" />
-                  Panel Admin
-                </Link>
-              </li>
-            )}
           </ul>
         </nav>
 
@@ -354,7 +323,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                       className={`ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${meta.className}`}
                     >
                       <Icon className="size-3" />
-                      {meta.label}
+                      {t(meta.labelKey as string)}
                     </span>
                   );
                 })()
@@ -367,7 +336,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 {profile?.avatar_url ? (
                   <AvatarImage
                     src={profile.avatar_url}
-                    alt={profile.full_name ?? "Avatar"}
+                    alt={profile.full_name ?? t("defaultAvatar")}
                   />
                 ) : null}
                 <AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
@@ -378,7 +347,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               </Avatar>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">
-                  {profile?.full_name ?? "Usuario"}
+                  {profile?.full_name ?? t("defaultUser")}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {profile?.email ?? ""}
@@ -401,7 +370,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 }
               >
                 <User className="size-4" />
-                Perfil
+                {t("menuProfile")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 render={
@@ -413,7 +382,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 }
               >
                 <Settings className="size-4" />
-                Configuración
+                {t("menuSettings")}
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border" />
               <DropdownMenuItem
@@ -421,7 +390,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
               >
                 <LogOut className="size-4" />
-                Cerrar sesión
+                {t("menuSignOut")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

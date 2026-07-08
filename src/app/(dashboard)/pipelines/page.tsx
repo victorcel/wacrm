@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
 import { GatedButton } from "@/components/ui/gated-button";
+import { useTranslations } from "next-intl";
 
 // Pipeline creation is admin-class (settings-tier write under
 // the new RLS); deal creation is operational and only requires
@@ -37,14 +38,15 @@ import { GatedButton } from "@/components/ui/gated-button";
 
 // Spec-defined seed — name and color per the product spec.
 const SPEC_DEFAULT_STAGES = [
-  { name: "Nuevo lead", color: "#3b82f6", position: 0 }, // blue
-  { name: "Cualificado", color: "#eab308", position: 1 }, // yellow
-  { name: "Propuesta enviada", color: "#f97316", position: 2 }, // orange
-  { name: "Negociación", color: "#8b5cf6", position: 3 }, // purple
-  { name: "Ganado", color: "#22c55e", position: 4 }, // green
+  { name: "New Lead", color: "#3b82f6", position: 0 }, // blue
+  { name: "Qualified", color: "#eab308", position: 1 }, // yellow
+  { name: "Proposal Sent", color: "#f97316", position: 2 }, // orange
+  { name: "Negotiation", color: "#8b5cf6", position: 3 }, // purple
+  { name: "Won", color: "#22c55e", position: 4 }, // green
 ];
 
 export default function PipelinesPage() {
+  const t = useTranslations("Pipelines.page");
   const supabase = createClient();
   const canEditSettings = useCan("edit-settings");
   const canCreateDeals = useCan("send-messages");
@@ -118,7 +120,7 @@ export default function PipelinesPage() {
 
     const { data: pipeline, error } = await supabase
       .from("pipelines")
-      .insert({ user_id: user.id, account_id: accountId, name: "Embudo de ventas" })
+      .insert({ user_id: user.id, account_id: accountId, name: "Sales Pipeline" })
       .select()
       .single();
 
@@ -223,11 +225,11 @@ export default function PipelinesPage() {
         .update({ stage_id: newStageId })
         .eq("id", dealId);
       if (error) {
-        toast.error("No se pudo mover el negocio");
+        toast.error(t("toastFailedMoveDeal"));
         refreshDeals();
       }
     },
-    [supabase, refreshDeals],
+    [supabase, refreshDeals, t],
   );
 
   const handleAddDeal = useCallback(
@@ -260,7 +262,7 @@ export default function PipelinesPage() {
     }
     // pipelines.account_id is NOT NULL post-017 with no DB default.
     if (!accountId) {
-      toast.error("Tu perfil no está vinculado a ninguna cuenta.");
+      toast.error(t("toastNotLinkedToAccount"));
       setCreating(false);
       return;
     }
@@ -272,7 +274,7 @@ export default function PipelinesPage() {
       .single();
 
     if (error || !pipeline) {
-      toast.error("No se pudo crear el embudo");
+      toast.error(t("toastFailedCreatePipeline"));
       setCreating(false);
       return;
     }
@@ -290,7 +292,7 @@ export default function PipelinesPage() {
     setSelectedPipelineId(pipeline.id);
     await refreshPipelines();
     setCreating(false);
-    toast.success("Embudo creado");
+    toast.success(t("toastPipelineCreated"));
   }
 
   const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId);
@@ -323,7 +325,7 @@ export default function PipelinesPage() {
             >
               <GitBranch className="h-4 w-4 text-primary" />
               <span className="font-semibold">
-                {selectedPipeline?.name ?? "Selecciona un embudo"}
+                {selectedPipeline?.name ?? t("selectPipeline")}
               </span>
               <ChevronDown className="h-4 w-4 text-muted-foreground" />
             </DropdownMenuTrigger>
@@ -333,7 +335,7 @@ export default function PipelinesPage() {
             >
               {pipelines.length === 0 && (
                 <DropdownMenuItem disabled className="text-muted-foreground">
-                  Aún no hay embudos
+                  {t("noPipelinesYet")}
                 </DropdownMenuItem>
               )}
               {pipelines.map((p) => (
@@ -357,7 +359,7 @@ export default function PipelinesPage() {
                   className="text-popover-foreground"
                 >
                   <Settings className="mr-2 h-3.5 w-3.5" />
-                  Gestionar embudos
+                  {t("managePipelines")}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -368,22 +370,22 @@ export default function PipelinesPage() {
           <GatedButton
             variant="outline"
             canAct={canEditSettings}
-            gateReason="crear embudos"
+            gateReason="create pipelines"
             onClick={() => setNewPipelineOpen(true)}
             className="border-border bg-card text-foreground hover:bg-muted"
           >
             <Plus className="mr-1 h-4 w-4" />
-            Añadir embudo
+            {t("addPipeline")}
           </GatedButton>
           <GatedButton
             canAct={canCreateDeals}
-            gateReason="crear negocios"
+            gateReason="create deals"
             disabled={!selectedPipelineId || stages.length === 0}
             onClick={() => handleAddDeal()}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="mr-1 h-4 w-4" />
-            Añadir negocio
+            {t("addDeal")}
           </GatedButton>
         </div>
       </div>
@@ -393,19 +395,19 @@ export default function PipelinesPage() {
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20">
           <GitBranch className="h-12 w-12 text-muted-foreground" />
           <h3 className="mt-4 text-lg font-medium text-foreground">
-            Aún no hay embudos
+            {t("noPipelinesYet")}
           </h3>
           <p className="mt-2 text-sm text-muted-foreground">
-            Crea un embudo para empezar a gestionar negocios
+            {t("createToStartTracking")}
           </p>
           <GatedButton
             canAct={canEditSettings}
-            gateReason="crear embudos"
+            gateReason="create pipelines"
             onClick={() => setNewPipelineOpen(true)}
             className="mt-4 bg-primary text-primary-foreground hover:bg-primary/90"
           >
             <Plus className="mr-1 h-4 w-4" />
-            Crear embudo
+            {t("createPipeline")}
           </GatedButton>
         </div>
       ) : (
@@ -425,21 +427,21 @@ export default function PipelinesPage() {
       <Dialog open={newPipelineOpen} onOpenChange={setNewPipelineOpen}>
         <DialogContent className="sm:max-w-sm bg-popover border-border">
           <DialogHeader>
-            <DialogTitle className="text-popover-foreground">Nuevo embudo</DialogTitle>
+            <DialogTitle className="text-popover-foreground">{t("newPipeline")}</DialogTitle>
           </DialogHeader>
           <div className="py-2">
-            <Label className="text-muted-foreground">Nombre del embudo</Label>
+            <Label className="text-muted-foreground">{t("pipelineName")}</Label>
             <Input
               value={newPipelineName}
               onChange={(e) => setNewPipelineName(e.target.value)}
-              placeholder="p. ej., Ventas Enterprise"
+              placeholder={t("pipelineNamePlaceholder")}
               className="mt-2 bg-muted border-border text-foreground"
               onKeyDown={(e) => {
                 if (e.key === "Enter") handleCreatePipeline();
               }}
             />
             <p className="mt-2 text-xs text-muted-foreground">
-              Se crearán automáticamente etapas por defecto (Nuevo lead → Ganado).
+              {t("defaultStagesDesc")}
             </p>
           </div>
           <DialogFooter className="bg-popover/50 border-border">
@@ -448,14 +450,14 @@ export default function PipelinesPage() {
               onClick={() => setNewPipelineOpen(false)}
               className="border-border text-muted-foreground hover:bg-muted"
             >
-              Cancelar
+              {t("cancel")}
             </Button>
             <Button
               onClick={handleCreatePipeline}
               disabled={creating || !newPipelineName.trim()}
               className="bg-primary text-primary-foreground hover:bg-primary/90"
             >
-              {creating ? "Creando..." : "Crear embudo"}
+              {creating ? t("creating") : t("createPipelineBtn")}
             </Button>
           </DialogFooter>
         </DialogContent>

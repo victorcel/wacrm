@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { ArrowLeft, Send, Loader2, Users, Save } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface AudienceConfig {
   type: string;
@@ -45,6 +46,7 @@ export function Step4ScheduleSend({
   isProcessing,
   progress,
 }: Step4Props) {
+  const t = useTranslations('Broadcasts.wizard');
   const [showConfirm, setShowConfirm] = useState(false);
   const [estimatedReach, setEstimatedReach] = useState<number>(0);
   const [loadingReach, setLoadingReach] = useState(true);
@@ -83,47 +85,47 @@ export function Step4ScheduleSend({
 
   const audienceLabel =
     audience.type === 'all'
-      ? 'Todos los contactos'
+      ? t('scheduleSend.audienceAll')
       : audience.type === 'tags'
-        ? `Etiquetas (${audience.tagIds?.length ?? 0} seleccionadas)`
+        ? t('scheduleSend.audienceTags')
         : audience.type === 'csv'
-          ? 'Subida de CSV'
-          : 'Personalizado';
+          ? t('scheduleSend.audienceCsv')
+          : t('scheduleSend.audienceField');
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Revisar y enviar</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t('scheduleSend.title')}</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Ponle nombre a tu difusión, revisa los detalles y envía.
+          {t('scheduleSend.subtitle')}
         </p>
       </div>
 
       {/* Broadcast Name */}
       <div>
-        <label className="mb-1.5 block text-sm font-medium text-foreground">Nombre de la difusión</label>
+        <label className="mb-1.5 block text-sm font-medium text-foreground">{t('scheduleSend.broadcastName')}</label>
         <Input
           value={name}
           onChange={(e) => onNameChange(e.target.value)}
-          placeholder="p. ej., Anuncio de rebajas de verano"
+          placeholder={t('scheduleSend.broadcastNamePlaceholder')}
           className="border-border bg-muted text-foreground placeholder:text-muted-foreground"
         />
       </div>
 
       {/* Summary Card */}
       <div className="rounded-xl border border-border bg-card/50 p-4 space-y-3">
-        <p className="text-sm font-medium text-foreground">Resumen</p>
+        <p className="text-sm font-medium text-foreground">{t('scheduleSend.summary')}</p>
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div>
-            <p className="text-xs text-muted-foreground">Plantilla</p>
+            <p className="text-xs text-muted-foreground">{t('scheduleSend.template')}</p>
             <p className="text-foreground">{template.name}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Audiencia</p>
+            <p className="text-xs text-muted-foreground">{t('scheduleSend.audience')}</p>
             <p className="text-foreground">{audienceLabel}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Alcance estimado</p>
+            <p className="text-xs text-muted-foreground">Estimated Reach</p>
             <div className="flex items-center gap-1.5">
               {loadingReach ? (
                 <Loader2 className="h-3 w-3 animate-spin text-primary" />
@@ -136,7 +138,7 @@ export function Step4ScheduleSend({
             </div>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground">Idioma</p>
+            <p className="text-xs text-muted-foreground">Language</p>
             <p className="text-foreground">{template.language ?? 'en_US'}</p>
           </div>
         </div>
@@ -148,7 +150,7 @@ export function Step4ScheduleSend({
           <div className="mb-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              <p className="text-sm font-medium text-foreground">Enviando difusión...</p>
+              <p className="text-sm font-medium text-foreground">{t('scheduleSend.sending')}</p>
             </div>
             <span className="text-xs font-medium text-primary">{progress}%</span>
           </div>
@@ -169,7 +171,7 @@ export function Step4ScheduleSend({
           className="border-border text-muted-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          Atrás
+          {t('back')}
         </Button>
 
         <div className="flex items-center gap-2">
@@ -181,7 +183,7 @@ export function Step4ScheduleSend({
               className="border-border text-muted-foreground hover:bg-muted disabled:opacity-50"
             >
               <Save className="h-4 w-4" />
-              Guardar como borrador
+              {t('scheduleSend.saveDraft')}
             </Button>
           )}
 
@@ -195,17 +197,17 @@ export function Step4ScheduleSend({
             }
           >
             <Send className="h-4 w-4" />
-            Enviar difusión
+            {t('scheduleSend.sendNow')}
           </DialogTrigger>
           <DialogContent className="border-border bg-popover sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-popover-foreground">Confirmar difusión</DialogTitle>
+              <DialogTitle className="text-popover-foreground">Confirm Broadcast</DialogTitle>
               <DialogDescription className="text-muted-foreground">
-                Estás a punto de enviar esta difusión a{' '}
+                You are about to send this broadcast to{' '}
                 <span className="font-medium text-popover-foreground">{estimatedReach.toLocaleString()}</span>{' '}
-                contactos usando la plantilla{' '}
-                <span className="font-medium text-popover-foreground">{template.name}</span>.
-                Esta acción no se puede deshacer.
+                contacts using the{' '}
+                <span className="font-medium text-popover-foreground">{template.name}</span> template.
+                This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
@@ -214,7 +216,7 @@ export function Step4ScheduleSend({
                 onClick={() => setShowConfirm(false)}
                 className="border-border text-muted-foreground"
               >
-                Cancelar
+                {t('cancel')}
               </Button>
               <Button
                 onClick={() => {
@@ -224,7 +226,7 @@ export function Step4ScheduleSend({
                 className="bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 <Send className="h-4 w-4" />
-                Confirmar y enviar
+                {t('scheduleSend.sendNow')}
               </Button>
             </DialogFooter>
           </DialogContent>

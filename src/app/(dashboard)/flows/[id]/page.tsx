@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { useTranslations } from "next-intl";
+
 import { FlowEditorShell } from "@/components/flows/flow-editor-shell";
 import type { FlowRow, FlowNodeRow } from "@/lib/flows/types";
 
@@ -23,6 +25,7 @@ import type { FlowRow, FlowNodeRow } from "@/lib/flows/types";
 export default function FlowEditorPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
+  const t = useTranslations("Flows.edit");
 
   const [flow, setFlow] = useState<FlowRow | null>(null);
   const [nodes, setNodes] = useState<FlowNodeRow[]>([]);
@@ -39,7 +42,7 @@ export default function FlowEditorPage() {
           if (!cancelled) setNotFound(true);
           return;
         }
-        if (!res.ok) throw new Error(`Falló: ${res.status}`);
+        if (!res.ok) throw new Error(`Failed: ${res.status}`);
         const json = (await res.json()) as {
           flow: FlowRow;
           nodes: FlowNodeRow[];
@@ -51,7 +54,7 @@ export default function FlowEditorPage() {
       } catch (err) {
         if (!cancelled) {
           console.error(err);
-          toast.error("No se pudo cargar el flujo.");
+          toast.error(t("loadError"));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -72,13 +75,13 @@ export default function FlowEditorPage() {
   if (notFound || !flow) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3">
-        <p className="text-sm text-muted-foreground">Flujo no encontrado.</p>
+        <p className="text-sm text-muted-foreground">{t("notFound")}</p>
         <button
           type="button"
           onClick={() => router.push("/flows")}
           className="text-sm text-primary hover:opacity-80"
         >
-          ← Volver a flujos
+          {t("backToFlows")}
         </button>
       </div>
     );

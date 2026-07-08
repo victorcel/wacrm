@@ -2,6 +2,7 @@
 
 import { useMemo, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 
 import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
@@ -15,7 +16,6 @@ import { TemplateManager } from '@/components/settings/template-manager';
 import { FieldsAndTagsPanel } from '@/components/settings/fields-and-tags-panel';
 import { DealsSettings } from '@/components/settings/deals-settings';
 import { MembersTab } from '@/components/settings/members-tab';
-import { SubscriptionPanel } from '@/components/settings/subscription-panel';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import {
   resolveSection,
@@ -27,6 +27,7 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const { defaultCurrency } = useAuth();
   const { mode } = useTheme();
+  const t = useTranslations('Settings');
 
   // The URL (`?tab=`) is the single source of truth for the active
   // section — deep-linkable, and it keeps the existing links in the
@@ -61,7 +62,6 @@ export default function SettingsPage() {
     fields: <FieldsAndTagsPanel />,
     deals: <DealsSettings />,
     members: <MembersTab />,
-    subscription: <SubscriptionPanel />,
     api: <ApiKeysSettings />,
   };
 
@@ -69,11 +69,10 @@ export default function SettingsPage() {
     <div>
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">
-          Configuración
+          {t('pageTitle')}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Todo en un lugar: tu cuenta y tu espacio de trabajo. Elige una
-          sección para administrarla.
+          {t('pageDesc')}
         </p>
       </div>
 

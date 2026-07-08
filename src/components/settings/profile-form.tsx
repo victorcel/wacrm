@@ -15,6 +15,7 @@ import {
   AvatarImage,
 } from '@/components/ui/avatar';
 import { Card, CardContent } from '@/components/ui/card';
+import { useTranslations } from 'next-intl';
 import { SettingsPanelHead } from './settings-panel-head';
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
@@ -31,6 +32,7 @@ const ALLOWED_MIME = new Set([
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function ProfileForm() {
+  const t = useTranslations('Settings.profile');
   const { user, profile, refreshProfile } = useAuth();
   const supabase = createClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,14 +72,14 @@ export function ProfileForm() {
     if (!file) return;
 
     if (!ALLOWED_MIME.has(file.type)) {
-      toast.error('Tipo de imagen no admitido', {
-        description: 'Usa PNG, JPG, WebP o GIF.',
+      toast.error(t('unsupportedImage'), {
+        description: t('unsupportedImageDesc'),
       });
       return;
     }
     if (file.size > MAX_AVATAR_BYTES) {
-      toast.error('La imagen es demasiado grande', {
-        description: 'Máximo 2 MB.',
+      toast.error(t('imageTooLarge'), {
+        description: t('imageTooLargeDesc'),
       });
       return;
     }
@@ -101,12 +103,12 @@ export function ProfileForm() {
 
     const trimmedName = fullName.trim();
     if (!trimmedName) {
-      toast.error('El nombre mostrado es obligatorio');
+      toast.error(t('nameRequired'));
       return;
     }
     const trimmedEmail = email.trim();
     if (!EMAIL_RE.test(trimmedEmail)) {
-      toast.error('Introduce una dirección de correo válida');
+      toast.error(t('invalidEmail'));
       return;
     }
 
@@ -127,7 +129,7 @@ export function ProfileForm() {
             contentType: pendingAvatar.type,
           });
         if (uploadError) {
-          throw new Error(`No se pudo cargar: ${uploadError.message}`);
+          throw new Error(t('uploadFailed', { message: uploadError.message }));
         }
         const {
           data: { publicUrl },
@@ -146,7 +148,7 @@ export function ProfileForm() {
         })
         .eq('user_id', user.id);
       if (updateError) {
-        throw new Error(`No se pudo guardar: ${updateError.message}`);
+        throw new Error(t('saveFailed', { message: updateError.message }));
       }
 
       // Email change goes through Supabase Auth, which emails a
@@ -161,8 +163,8 @@ export function ProfileForm() {
         });
         if (emailError) {
           // Partial success: name/avatar saved but email didn't.
-          toast.success('Perfil guardado');
-          toast.error(`No se pudo cambiar el correo: ${emailError.message}`);
+          toast.success(t('profileSaved'));
+          toast.error(t('emailChangeFailed', { message: emailError.message }));
           setSaving(false);
           await refreshProfile();
           return;
@@ -178,11 +180,11 @@ export function ProfileForm() {
 
       toast.success(
         emailSent
-          ? 'Perfil guardado — comprueba tu correo para confirmar el cambio de dirección'
-          : 'Perfil guardado',
+          ? t('profileSavedEmailCheck')
+          : t('profileSaved'),
       );
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      const msg = err instanceof Error ? err.message : 'Unknown error';
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -207,8 +209,8 @@ export function ProfileForm() {
   return (
     <section className="max-w-2xl animate-in fade-in-50 duration-200">
       <SettingsPanelHead
-        title="Tu perfil"
-        description="Cómo te muestras en la aplicación. Tu avatar y nombre aparecen en el encabezado, barra lateral y en cualquier lugar donde tus compañeros te vean."
+        title={t('title')}
+        description={t('description')}
       />
       <form onSubmit={onSubmit} className="space-y-4">
         <Card>
@@ -239,7 +241,7 @@ export function ProfileForm() {
                 disabled={saving}
               >
                 <Upload className="size-4" />
-                {currentAvatar ? 'Cambiar foto' : 'Subir foto'}
+                {currentAvatar ? t('changePhoto') : t('uploadPhoto')}
               </Button>
               {currentAvatar && (
                 <Button
@@ -250,11 +252,11 @@ export function ProfileForm() {
                   className="text-muted-foreground hover:text-foreground"
                 >
                   <Trash2 className="size-4" />
-                  Eliminar
+                  {t('remove')}
                 </Button>
               )}
               <p className="w-full text-xs text-muted-foreground">
-                PNG, JPG, WebP o GIF. Máximo 2 MB.
+                {t('photoHint')}
               </p>
             </div>
           </div>
@@ -262,7 +264,7 @@ export function ProfileForm() {
           {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="profile-full-name" className="text-foreground">
-              Nombre mostrado
+              {t('displayName')}
             </Label>
             <Input
               id="profile-full-name"
@@ -278,7 +280,7 @@ export function ProfileForm() {
           {/* Email */}
           <div className="space-y-2">
             <Label htmlFor="profile-email" className="text-foreground">
-              Correo electrónico
+              {t('email')}
             </Label>
             <Input
               id="profile-email"
@@ -292,9 +294,11 @@ export function ProfileForm() {
               <p className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                 <Mail className="mt-0.5 size-3.5 shrink-0" />
                 <span>
-                  Comprueba la bandeja de entrada para <strong>{profile?.email}</strong> y{' '}
-                  <strong>{email}</strong> — ambos deben confirmar antes de que el
-                  cambio surta efecto.
+                  {t.rich('emailChangeHint', { 
+                    oldEmail: profile?.email || '', 
+                    newEmail: email,
+                    bold: (chunks: React.ReactNode) => <strong>{chunks}</strong>
+                  })}
                 </span>
               </p>
             )}
@@ -303,21 +307,21 @@ export function ProfileForm() {
           {/* Read-only block */}
           <div className="rounded-lg border border-border bg-muted p-4">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Account details
+              {t('accountDetails')}
             </p>
             <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
               <div>
-                <dt className="text-muted-foreground">Role</dt>
+                <dt className="text-muted-foreground">{t('role')}</dt>
                 <dd className="mt-0.5 font-mono text-foreground">
                   {profile?.role ?? 'user'}
                 </dd>
               </div>
               <div>
-                <dt className="text-muted-foreground">Joined</dt>
+                <dt className="text-muted-foreground">{t('joined')}</dt>
                 <dd className="mt-0.5 text-foreground">{joined}</dd>
               </div>
               <div className="sm:col-span-2">
-                <dt className="text-muted-foreground">User ID</dt>
+                <dt className="text-muted-foreground">{t('userId')}</dt>
                 <dd className="mt-0.5 break-all font-mono text-xs text-muted-foreground">
                   {user?.id ?? '—'}
                 </dd>
@@ -328,7 +332,7 @@ export function ProfileForm() {
           {!profile && (
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <CircleAlert className="size-4" />
-              Loading your profile…
+              {t('loading')}
             </p>
           )}
 
@@ -340,10 +344,10 @@ export function ProfileForm() {
             {saving ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
-                Saving…
+                {t('saving')}
               </>
             ) : (
-              'Save changes'
+              t('saveChanges')
             )}
           </Button>
         </div>

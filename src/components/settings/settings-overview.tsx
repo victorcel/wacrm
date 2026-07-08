@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { ChevronRight, Loader2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
@@ -38,6 +39,9 @@ export function SettingsOverview({
   const { user, profile, accountId, accountRole, defaultCurrency, canManageMembers } =
     useAuth();
   const { mode, theme } = useTheme();
+  const t = useTranslations('Settings.overview');
+  const tRoles = useTranslations('roles');
+  const tSections = useTranslations('Settings.sections');
 
   const [counts, setCounts] = useState<OverviewCounts | null>(null);
   const [countsLoading, setCountsLoading] = useState(true);
@@ -137,7 +141,7 @@ export function SettingsOverview({
     };
   }, [user?.id, accountId, canManageMembers]);
 
-  const displayName = profile?.full_name || profile?.email || 'Tu cuenta';
+  const displayName = profile?.full_name || profile?.email || t('yourAccount');
   const initial = (profile?.full_name || profile?.email || 'U').charAt(0).toUpperCase();
   const roleMeta = accountRole ? ROLE_META[accountRole] : null;
   const RoleIcon = roleMeta?.icon;
@@ -158,14 +162,14 @@ export function SettingsOverview({
       section: 'whatsapp',
       loading: whatsappLoading,
       subtitle: !whatsapp?.configured ? (
-        'Aún no configurado'
+        t('notSetup')
       ) : whatsapp.connected ? (
         <>
-          <StatusDot tone="ok" /> Conectado
+          <StatusDot tone="ok" /> {t('connected')}
         </>
       ) : (
         <>
-          <StatusDot tone="muted" /> Necesita reconectarse
+          <StatusDot tone="muted" /> {t('needsReconnecting')}
         </>
       ),
     },
@@ -174,12 +178,10 @@ export function SettingsOverview({
       loading: countsLoading,
       subtitle:
         counts?.members == null
-          ? 'Ver miembros del equipo'
-          : `${counts.members} miembro${counts.members === 1 ? '' : 's'}${
+          ? t('viewTeamMembers')
+          : `${t('membersCount', { count: counts.members })}${
               counts.pendingInvites
-                ? ` · ${counts.pendingInvites} invitación pendiente${
-                    counts.pendingInvites === 1 ? '' : 's'
-                  }`
+                ? ` · ${t('pendingInvites', { count: counts.pendingInvites })}`
                 : ''
             }`,
     },
@@ -188,10 +190,10 @@ export function SettingsOverview({
       loading: countsLoading,
       subtitle:
         counts?.templates == null
-          ? 'Gestionar plantillas de mensajes'
-          : `${counts.templates} plantilla${counts.templates === 1 ? '' : 's'}${
+          ? t('manageTemplates')
+          : `${t('templatesCount', { count: counts.templates })}${
               counts.templatesPending
-                ? ` · ${counts.templatesPending} en revisión`
+                ? ` · ${t('pendingReview', { count: counts.templatesPending })}`
                 : ''
             }`,
     },
@@ -205,15 +207,15 @@ export function SettingsOverview({
       loading: countsLoading,
       subtitle:
         counts?.tags == null && counts?.customFields == null
-          ? 'Etiquetas y campos personalizados'
-          : `${counts?.tags ?? 0} etiqueta${counts?.tags === 1 ? '' : 's'} · ${
-              counts?.customFields ?? 0
-            } campo personalizado${counts?.customFields === 1 ? '' : 's'}`,
+          ? t('tagsAndFields')
+          : `${t('tagsCount', { count: counts?.tags ?? 0 })} · ${t('fieldsCount', {
+              count: counts?.customFields ?? 0,
+            })}`,
     },
     {
       section: 'appearance',
       loading: false,
-      subtitle: `Modo ${cap(mode)} · Acento ${themeName}`,
+      subtitle: t('appearance', { mode: cap(mode), theme: themeName }),
     },
   ];
 
@@ -242,7 +244,7 @@ export function SettingsOverview({
         {roleMeta && RoleIcon ? (
           <SettingsChip variant={roleMeta.variant}>
             <RoleIcon />
-            {roleMeta.label}
+            {tRoles(accountRole!)}
           </SettingsChip>
         ) : null}
       </Card>
@@ -267,12 +269,12 @@ export function SettingsOverview({
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold text-foreground">
-                  {meta.label}
+                  {tSections(section)}
                 </span>
                 <span className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                   {loading ? (
                     <>
-                      <Loader2 className="size-3 animate-spin" /> Cargando…
+                      <Loader2 className="size-3 animate-spin" /> {t('loading')}
                     </>
                   ) : (
                     subtitle

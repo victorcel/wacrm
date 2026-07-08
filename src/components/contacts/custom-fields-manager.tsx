@@ -13,9 +13,9 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Input } from '@/components/ui/input';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface CustomFieldsManagerProps {
   open: boolean;
@@ -32,15 +32,14 @@ export function CustomFieldsManager({
   open,
   onOpenChange,
 }: CustomFieldsManagerProps) {
+  const t = useTranslations('Contacts.customFields');
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border-border bg-popover text-popover-foreground sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-popover-foreground">Campos personalizados</DialogTitle>
+          <DialogTitle className="text-popover-foreground">{t('title')}</DialogTitle>
           <DialogDescription className="text-muted-foreground">
-            Define campos de contacto adicionales (p. ej. código postal, origen
-            del lead). Aparecen en cada contacto y en la acción de automatización
-            «Actualizar campo de contacto».
+            {t('desc')}
           </DialogDescription>
         </DialogHeader>
         <CustomFieldsPanel />
@@ -56,6 +55,7 @@ export function CustomFieldsManager({
  * `custom_fields` RLS also rejects non-admin writes as defense in depth.
  */
 export function CustomFieldsPanel() {
+  const t = useTranslations('Contacts.customFields');
   const supabase = createClient();
   const { user, accountId } = useAuth();
 
@@ -64,7 +64,6 @@ export function CustomFieldsPanel() {
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<CustomField | null>(null);
 
   const fetchFields = useCallback(async () => {
     if (!accountId) return;
@@ -99,11 +98,11 @@ export function CustomFieldsPanel() {
     const name = newName.trim();
     if (!name) return;
     if (!accountId || !user) {
-      toast.error('Tu perfil no está vinculado a ninguna cuenta.');
+      toast.error(t('toastNoAccount'));
       return;
     }
     if (isDuplicate(name)) {
-      toast.error(`Ya existe un campo llamado "${name}".`);
+      toast.error(t('toastDuplicate', { name }));
       return;
     }
 
@@ -117,10 +116,10 @@ export function CustomFieldsPanel() {
     setCreating(false);
 
     if (error) {
-      toast.error('No se pudo crear el campo. Puede que no tengas permiso.');
+      toast.error(t('toastCreateFailed'));
       return;
     }
-    toast.success(`Se creó "${name}".`);
+    toast.success(t('toastCreated', { name }));
     setNewName('');
     await fetchFields();
   }
@@ -134,7 +133,7 @@ export function CustomFieldsPanel() {
     const name = nextName.trim();
     if (!name || name === field.field_name) return true;
     if (isDuplicate(name, field.id)) {
-      toast.error(`Ya existe un campo llamado "${name}".`);
+      toast.error(t('toastDuplicate', { name }));
       return false;
     }
     setBusyId(field.id);
@@ -144,7 +143,7 @@ export function CustomFieldsPanel() {
       .eq('id', field.id);
     setBusyId(null);
     if (error) {
-      toast.error('No se pudo renombrar el campo.');
+      toast.error(t('toastRenameFailed'));
       return false;
     }
     await fetchFields();
@@ -152,13 +151,13 @@ export function CustomFieldsPanel() {
   }
 
   async function handleDelete(field: CustomField) {
-    setPendingDelete(field);
-  }
-
-  async function confirmDelete() {
-    const field = pendingDelete;
-    if (!field) return;
-    setPendingDelete(null);
+    if (
+      !window.confirm(
+        t('deleteConfirm', { name: field.field_name })
+      )
+    ) {
+      return;
+    }
     setBusyId(field.id);
     const { error } = await supabase
       .from('custom_fields')
@@ -166,10 +165,10 @@ export function CustomFieldsPanel() {
       .eq('id', field.id);
     setBusyId(null);
     if (error) {
-      toast.error('No se pudo eliminar el campo.');
+      toast.error(t('toastDeleteFailed'));
       return;
     }
-    toast.success(`Se eliminó "${field.field_name}".`);
+    toast.success(t('toastDeleted', { name: field.field_name }));
     await fetchFields();
   }
 
@@ -186,7 +185,7 @@ export function CustomFieldsPanel() {
               void handleCreate();
             }
           }}
-          placeholder="Nombre del nuevo campo…"
+          placeholder={t('fieldName')}
           className="bg-muted text-foreground"
         />
         <Button
@@ -199,7 +198,7 @@ export function CustomFieldsPanel() {
           ) : (
             <Plus className="size-4" />
           )}
-          Añadir
+          {t('addField')}
         </Button>
       </div>
 
@@ -208,11 +207,11 @@ export function CustomFieldsPanel() {
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            Cargando…
+            {t('loading')}
           </div>
         ) : fields.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Aún no hay campos personalizados.
+            {t('empty')}
           </p>
         ) : (
           <ul className="divide-y divide-border">
@@ -228,17 +227,6 @@ export function CustomFieldsPanel() {
           </ul>
         )}
       </div>
-
-      <ConfirmDialog
-        open={!!pendingDelete}
-        onOpenChange={() => setPendingDelete(null)}
-        title={pendingDelete ? `¿Eliminar "${pendingDelete.field_name}"?` : ""}
-        description="También se eliminará su valor guardado en cada contacto. Esta acción no se puede deshacer."
-        confirmLabel="Eliminar"
-        cancelLabel="Cancelar"
-        destructive
-        onConfirm={confirmDelete}
-      />
     </div>
   );
 }
@@ -256,6 +244,7 @@ function FieldRow({
   onRename: (field: CustomField, name: string) => Promise<boolean>;
   onDelete: (field: CustomField) => void;
 }) {
+  const t = useTranslations('Contacts.customFields');
   const [name, setName] = useState(field.field_name);
 
   async function commit() {
@@ -277,7 +266,7 @@ function FieldRow({
         onKeyDown={(e) => {
           if (e.key === 'Enter') e.currentTarget.blur();
         }}
-        aria-label={`Renombrar ${field.field_name}`}
+        aria-label={t('renameAria', { name: field.field_name })}
         className="focus:border-primary h-8 border-transparent bg-transparent text-foreground hover:border-border"
       />
       <Button
@@ -285,7 +274,7 @@ function FieldRow({
         size="icon-sm"
         disabled={busy}
         onClick={() => onDelete(field)}
-        title="Eliminar campo"
+        title={t('deleteTitle')}
         className="shrink-0 text-muted-foreground hover:text-red-400"
       >
         {busy ? (

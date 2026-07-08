@@ -16,10 +16,12 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
+import { useTranslations } from 'next-intl';
 
 const MIN_PASSWORD = 8;
 
 export function PasswordForm() {
+  const t = useTranslations('Settings.profile');
   const { profile } = useAuth();
   const supabase = createClient();
 
@@ -32,15 +34,15 @@ export function PasswordForm() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile?.email) {
-      toast.error('No se puede cambiar la contraseña sin un correo actual');
+      toast.error(t('cannotChangeNoEmail'));
       return;
     }
     if (next.length < MIN_PASSWORD) {
-      setConfirmError(`La contraseña debe tener al menos ${MIN_PASSWORD} caracteres`);
+      setConfirmError(t('passwordTooShort', { min: MIN_PASSWORD }));
       return;
     }
     if (next !== confirm) {
-      setConfirmError('La nueva contraseña y la confirmación no coinciden');
+      setConfirmError(t('passwordMismatch'));
       return;
     }
     setConfirmError(null);
@@ -56,7 +58,7 @@ export function PasswordForm() {
         password: current,
       });
       if (signInError) {
-        toast.error('La contraseña actual es incorrecta');
+        toast.error(t('currentPasswordIncorrect'));
         return;
       }
 
@@ -64,16 +66,16 @@ export function PasswordForm() {
         password: next,
       });
       if (updateError) {
-        toast.error(`No se pudo actualizar la contraseña: ${updateError.message}`);
+        toast.error(t('passwordUpdateFailed', { message: updateError.message }));
         return;
       }
 
       setCurrent('');
       setNext('');
       setConfirm('');
-      toast.success('Contraseña actualizada');
+      toast.success(t('passwordUpdated'));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error desconocido';
+      const msg = err instanceof Error ? err.message : 'Unknown error';
       toast.error(msg);
     } finally {
       setSaving(false);
@@ -85,11 +87,10 @@ export function PasswordForm() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-foreground">
           <KeyRound className="size-4 text-primary" />
-          Contraseña
+          {t('passwordTitle')}
         </CardTitle>
         <CardDescription className="text-muted-foreground">
-          Usa al menos {MIN_PASSWORD} caracteres. Permanecerás conectado en
-          este dispositivo después de cambiarla.
+          {t('passwordDesc', { min: MIN_PASSWORD })}
         </CardDescription>
       </CardHeader>
 
@@ -97,7 +98,7 @@ export function PasswordForm() {
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="current-password" className="text-foreground">
-              Contraseña actual
+              {t('currentPassword')}
             </Label>
             <Input
               id="current-password"
@@ -113,7 +114,7 @@ export function PasswordForm() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="new-password" className="text-foreground">
-                Nueva contraseña
+                {t('newPassword')}
               </Label>
               <Input
                 id="new-password"
@@ -128,7 +129,7 @@ export function PasswordForm() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-password" className="text-foreground">
-                Confirmar nueva contraseña
+                {t('confirmPassword')}
               </Label>
               <Input
                 id="confirm-password"
@@ -157,10 +158,10 @@ export function PasswordForm() {
               {saving ? (
                 <>
                   <Loader2 className="size-4 animate-spin" />
-                  Updating…
+                  {t('updating')}
                 </>
               ) : (
-                'Update password'
+                t('updatePassword')
               )}
             </Button>
           </div>

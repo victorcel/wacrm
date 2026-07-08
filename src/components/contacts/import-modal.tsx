@@ -37,6 +37,7 @@ import {
   AlertTriangle,
   Tag,
 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 const DEFAULT_TAG_COLOR = '#3b82f6';
 const PREVIEW_LIMIT = 5;
@@ -79,6 +80,8 @@ function ImportPreviewTags({
   tagNames: string[];
   tagColorByKey: Map<string, string>;
 }) {
+  const t = useTranslations('Contacts.importModal');
+
   if (tagNames.length === 0) {
     return <span className="text-muted-foreground">—</span>;
   }
@@ -98,7 +101,7 @@ function ImportPreviewTags({
               color,
               border: `1px solid ${color}${isKnown ? '55' : '30'}`,
             }}
-            title={isKnown ? name : `${name} (se creará al importar)`}
+            title={isKnown ? name : t('willBeCreated', { name })}
           >
             <span
               className="size-1.5 shrink-0 rounded-full"
@@ -123,6 +126,7 @@ export function ImportModal({
   onOpenChange,
   onImported,
 }: ImportModalProps) {
+  const t = useTranslations('Contacts.importModal');
   const supabase = createClient();
   const { accountId, canEditSettings } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -172,9 +176,7 @@ export function ImportModal({
     } = parseContactCsv(text);
 
     if (rows.length === 0) {
-      toast.error(
-        'No se encontraron filas válidas. Asegúrate de que el CSV tenga una columna "phone".'
-      );
+      toast.error(t('toastNoValidRows'));
       setParsedRows([]);
       setHasTagsColumn(false);
       setHasCompanyColumn(false);
@@ -212,9 +214,9 @@ export function ImportModal({
         data: { session },
       } = await supabase.auth.getSession();
       const user = session?.user;
-      if (!user) throw new Error('No has iniciado sesión');
+      if (!user) throw new Error('Not authenticated');
       if (!accountId)
-        throw new Error('Tu perfil no está vinculado a ninguna cuenta.');
+        throw new Error('Your profile is not linked to an account.');
 
       let imported = 0;
       let skipped = 0;
@@ -336,39 +338,31 @@ export function ImportModal({
           tagIdByKey
         );
       } catch {
-        toast.warning('Contactos importados, pero algunas asignaciones de etiquetas fallaron.');
+        toast.warning(t('toastTagsWarning'));
       }
 
       setResult({ imported, skipped, failed, tagsAssigned });
       if (imported > 0) {
-        toast.success(
-          `${imported} contacto${imported !== 1 ? 's' : ''} importado${imported !== 1 ? 's' : ''}`
-        );
+        toast.success(t('toastImported', { count: imported }));
         onImported();
       }
       if (tagsAssigned > 0) {
-        toast.success(
-          `${tagsAssigned} ${tagsAssigned !== 1 ? 'asignaciones de etiqueta aplicadas' : 'asignación de etiqueta aplicada'}`
-        );
+        toast.success(t('toastTagsAssigned', { count: tagsAssigned }));
       }
       if (skippedNames.length > 0) {
         const sample = skippedNames.slice(0, 3).join(', ');
         const more =
-          skippedNames.length > 3 ? ` (+${skippedNames.length - 3} más)` : '';
-        toast.info(
-          `Etiquetas desconocidas omitidas (créalas primero en Configuración): ${sample}${more}`
-        );
+          skippedNames.length > 3 ? ` (+${skippedNames.length - 3} more)` : '';
+        toast.info(t('toastTagsSkipped', { sample, more }));
       }
       if (skipped > 0) {
-        toast.info(`${skipped} ${skipped !== 1 ? 'duplicados omitidos' : 'duplicado omitido'}`);
+        toast.info(t('toastSkipped', { count: skipped }));
       }
       if (failed > 0) {
-        toast.error(
-          `No se pudieron importar ${failed} contacto${failed !== 1 ? 's' : ''}`
-        );
+        toast.error(t('toastFailed', { count: failed }));
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error al importar';
+      const message = err instanceof Error ? err.message : t('toastError');
       toast.error(message);
     } finally {
       setImporting(false);
@@ -402,31 +396,19 @@ export function ImportModal({
         <div className="shrink-0 space-y-4 border-b border-border/80 px-6 pt-6 pb-5">
           <DialogHeader className="gap-1.5">
             <DialogTitle className="text-lg text-popover-foreground">
-              Importar contactos
+              {t('title')}
             </DialogTitle>
-            <DialogDescription className="leading-relaxed text-muted-foreground">
-              Sube un CSV con una columna{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                phone
-              </code>{' '}
-              obligatoria. Opcionales:{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                name
-              </code>
-              ,{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                email
-              </code>
-              ,{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                company
-              </code>
-              ,{' '}
-              <code className="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">
-                tags
-              </code>{' '}
-              (separadas por comas; entrecomilla las celdas con varias etiquetas).
-            </DialogDescription>
+            <DialogDescription className="leading-relaxed text-muted-foreground"
+              dangerouslySetInnerHTML={{
+                __html: t.markup('desc', {
+                  phoneCode: (chunks) => `<code class="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">${chunks}</code>`,
+                  nameCode: (chunks) => `<code class="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">${chunks}</code>`,
+                  emailCode: (chunks) => `<code class="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">${chunks}</code>`,
+                  companyCode: (chunks) => `<code class="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">${chunks}</code>`,
+                  tagsCode: (chunks) => `<code class="rounded bg-muted px-1 py-0.5 text-[11px] text-muted-foreground">${chunks}</code>`,
+                })
+              }}
+            />
           </DialogHeader>
 
           <div
@@ -456,8 +438,7 @@ export function ImportModal({
                   {truncateFilename(file.name)}
                 </p>
                 <span className="rounded-full bg-muted px-2.5 py-0.5 text-[11px] font-medium text-muted-foreground">
-                  {parsedRows.length} fila{parsedRows.length !== 1 ? 's' : ''}{' '}
-                  {parsedRows.length !== 1 ? 'listas' : 'lista'}
+                  {t('rowsReady', { count: parsedRows.length })}
                 </span>
               </>
             ) : (
@@ -466,10 +447,10 @@ export function ImportModal({
                   <Upload className="size-5 text-muted-foreground group-hover:text-foreground" />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Haz clic para elegir un archivo CSV
+                  {t('uploadDropzone')}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  .csv hasta el límite de tu navegador
+                  {t('uploadHint')}
                 </p>
               </>
             )}
@@ -489,15 +470,13 @@ export function ImportModal({
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-[11px] font-semibold tracking-[0.14em] text-muted-foreground uppercase">
-                  Vista previa · primeras {preview.length}
+                  {t('preview', { count: preview.length })}
                 </p>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {tagStats.rowsWithTags > 0 && (
                     <span className="inline-flex items-center gap-1 rounded-md bg-muted/90 px-2 py-0.5 text-[11px] text-muted-foreground">
                       <Tag className="text-primary/80 size-3" />
-                      {tagStats.unique} etiqueta{tagStats.unique !== 1 ? 's' : ''} ·{' '}
-                      {tagStats.rowsWithTags} contacto
-                      {tagStats.rowsWithTags !== 1 ? 's' : ''}
+                      {t('previewTags', { tags: tagStats.unique, contacts: tagStats.rowsWithTags })}
                     </span>
                   )}
                 </div>
@@ -509,22 +488,22 @@ export function ImportModal({
                     <thead>
                       <tr className="border-b border-border bg-background/60">
                         <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
-                          Teléfono
+                          {t('columns.phone')}
                         </th>
                         <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
-                          Nombre
+                          {t('columns.name')}
                         </th>
                         <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
-                          Correo
+                          {t('columns.email')}
                         </th>
                         {previewHasCompany && (
                           <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
-                            Empresa
+                            {t('columns.company')}
                           </th>
                         )}
                         {previewHasTags && (
                           <th className="px-3 py-2 text-left font-medium whitespace-nowrap text-muted-foreground">
-                            Etiquetas
+                            {t('columns.tags')}
                           </th>
                         )}
                       </tr>
@@ -579,8 +558,7 @@ export function ImportModal({
 
               {parsedRows.length > PREVIEW_LIMIT && (
                 <p className="text-center text-[11px] text-muted-foreground">
-                  + {parsedRows.length - PREVIEW_LIMIT} fila
-                  {parsedRows.length - PREVIEW_LIMIT !== 1 ? 's' : ''} más no mostradas
+                  {t('moreRows', { count: parsedRows.length - PREVIEW_LIMIT })}
                 </p>
               )}
             </div>
@@ -588,32 +566,30 @@ export function ImportModal({
 
           {result && (
             <div className="rounded-xl border border-border bg-background/50 p-4">
-              <p className="text-sm font-medium text-popover-foreground">Importación completada</p>
+              <p className="text-sm font-medium text-popover-foreground">{t('importComplete')}</p>
               <div className="mt-3 flex flex-wrap gap-3">
                 {result.imported > 0 && (
                   <div className="text-primary flex items-center gap-1.5 text-sm">
                     <CheckCircle className="size-4 shrink-0" />
-                    {result.imported} importados
+                    {t('resultImported', { count: result.imported })}
                   </div>
                 )}
                 {result.tagsAssigned > 0 && (
                   <div className="flex items-center gap-1.5 text-sm text-cyan-400">
                     <CheckCircle className="size-4 shrink-0" />
-                    {result.tagsAssigned} etiqueta
-                    {result.tagsAssigned !== 1 ? 's' : ''} asignada
-                    {result.tagsAssigned !== 1 ? 's' : ''}
+                    {t('resultTags', { count: result.tagsAssigned })}
                   </div>
                 )}
                 {result.skipped > 0 && (
                   <div className="flex items-center gap-1.5 text-sm text-amber-400">
                     <AlertTriangle className="size-4 shrink-0" />
-                    {result.skipped} omitidos
+                    {t('resultSkipped', { count: result.skipped })}
                   </div>
                 )}
                 {result.failed > 0 && (
                   <div className="flex items-center gap-1.5 text-sm text-red-400">
                     <XCircle className="size-4 shrink-0" />
-                    {result.failed} fallidos
+                    {t('resultFailed', { count: result.failed })}
                   </div>
                 )}
               </div>
@@ -628,7 +604,7 @@ export function ImportModal({
             onClick={() => handleOpenChange(false)}
             className="border-border text-muted-foreground hover:bg-muted"
           >
-            {result ? 'Cerrar' : 'Cancelar'}
+            {result ? t('close') : t('cancel')}
           </Button>
           {!result && (
             <Button
@@ -638,8 +614,7 @@ export function ImportModal({
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
               {importing && <Loader2 className="size-4 animate-spin" />}
-              Importar {parsedRows.length > 0 ? parsedRows.length : ''} contacto
-              {parsedRows.length !== 1 ? 's' : ''}
+              {parsedRows.length > 0 ? t('importBtn', { count: parsedRows.length }) : t('importBtn', { count: 0 })}
             </Button>
           )}
         </DialogFooter>

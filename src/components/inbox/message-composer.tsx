@@ -37,6 +37,7 @@ import {
   MEDIA_MAX_BYTES_BY_KIND,
 } from "@/lib/storage/upload-media";
 import { ReplyQuote } from "./reply-quote";
+import { useTranslations } from "next-intl";
 
 /** Media content types an agent can send from the composer. */
 export type ComposerMediaKind = "image" | "video" | "document" | "audio";
@@ -121,6 +122,8 @@ export function MessageComposer({
   replyTo,
   onClearReply,
 }: MessageComposerProps) {
+  const t = useTranslations("Inbox.composer");
+
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [drafting, setDrafting] = useState(false);
@@ -278,7 +281,7 @@ export function MessageComposer({
       const max = MEDIA_MAX_BYTES_BY_KIND[kind];
       if (file.size > max) {
         toast.error(
-          `El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)} MB — el límite es ${Math.round(
+          `File is ${(file.size / 1024 / 1024).toFixed(1)} MB — ${kind} limit is ${Math.round(
             max / 1024 / 1024,
           )} MB.`,
         );
@@ -291,7 +294,7 @@ export function MessageComposer({
         removeStaged(draftRef.current?.path);
         setDraft({ kind, mediaUrl: publicUrl, path, filename: file.name, caption: "" });
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al subir el archivo.");
+        toast.error(err instanceof Error ? err.message : "Upload failed.");
       } finally {
         setBusy(false);
       }
@@ -319,7 +322,7 @@ export function MessageComposer({
       });
       if (file.size === 0) return; // cancelled / empty take
       if (file.size > MEDIA_MAX_BYTES_BY_KIND.audio) {
-        toast.error("La grabación es demasiado larga (más de 16 MB).");
+        toast.error("Recording is too long (over 16 MB).");
         return;
       }
       setBusy(true);
@@ -328,7 +331,7 @@ export function MessageComposer({
         removeStaged(draftRef.current?.path);
         setDraft({ kind: "audio", mediaUrl: publicUrl, path, filename: file.name, caption: "" });
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Error al subir el archivo.");
+        toast.error(err instanceof Error ? err.message : "Upload failed.");
       } finally {
         setBusy(false);
       }
@@ -339,7 +342,7 @@ export function MessageComposer({
   const startRecording = useCallback(async () => {
     if (inputsDisabled || busy || recording) return;
     if (!navigator.mediaDevices?.getUserMedia || typeof AudioContext === "undefined") {
-      toast.error("La grabación de voz no es compatible con este navegador.");
+      toast.error("Voice recording isn't supported in this browser.");
       return;
     }
     try {
@@ -366,7 +369,7 @@ export function MessageComposer({
     } catch {
       void recorderRef.current?.stop().catch(() => {});
       recorderRef.current = null;
-      toast.error("Acceso al micrófono denegado o no disponible.");
+      toast.error("Microphone access denied or unavailable.");
     }
   }, [inputsDisabled, busy, recording, finalizeRecording]);
 
@@ -437,7 +440,7 @@ export function MessageComposer({
       {sessionExpired && (
         <div className="mb-2 flex items-center justify-between rounded-lg bg-amber-500/10 px-3 py-2">
           <p className="text-xs text-amber-400">
-            La sesión de 24 horas ha expirado. Usa una plantilla para reanudar el contacto.
+            {t("sessionExpiredHint")}
           </p>
           <Button
             variant="ghost"
@@ -446,7 +449,7 @@ export function MessageComposer({
             onClick={onOpenTemplates}
           >
             <LayoutTemplate className="mr-1 h-3 w-3" />
-            Plantillas
+            {t("templates")}
           </Button>
         </div>
       )}
@@ -491,27 +494,27 @@ export function MessageComposer({
           onCaptionChange={setCaption}
           onDiscard={discardDraft}
           onSend={sendDraft}
+          t={t}
         />
       ) : recording ? (
         // Recording bar — replaces the composer while the mic is live.
         <div className="flex items-center gap-3 rounded-xl border border-border bg-muted px-4 py-2.5">
           <span className="flex h-2.5 w-2.5 shrink-0 animate-pulse rounded-full bg-red-500" />
           <span className="flex-1 text-sm text-foreground">
-            Grabando… {formatDuration(recordSeconds)} /{" "}
-            {formatDuration(MAX_RECORDING_SECONDS)}
+            {t("recording", { current: formatDuration(recordSeconds), max: formatDuration(MAX_RECORDING_SECONDS) })}
           </span>
           <button
             type="button"
             onClick={cancelRecording}
             className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-card hover:text-foreground"
           >
-            Cancelar
+            {t("cancel")}
           </button>
           <Button
             size="sm"
             onClick={stopRecording}
             className="h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90"
-            title="Detener y adjuntar"
+            title={t("stopAndAttach")}
           >
             <Square className="h-4 w-4" />
           </Button>
@@ -524,10 +527,10 @@ export function MessageComposer({
               disabled={inputsDisabled || busy}
               title={
                 readOnly
-                  ? "Solo lectura — tu rol no puede enviar mensajes"
+                  ? t("readOnlyTitle")
                   : inputsDisabled
                     ? undefined
-                    : "Adjuntar archivo"
+                    : t("attachMedia")
               }
               className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -540,19 +543,19 @@ export function MessageComposer({
             <DropdownMenuContent align="start" className="border-border bg-popover">
               <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
                 <ImageIcon className="mr-2 h-4 w-4" />
-                Foto
+                {t("photo")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => videoInputRef.current?.click()}>
                 <Video className="mr-2 h-4 w-4" />
-                Vídeo
+                {t("video")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
                 <FileText className="mr-2 h-4 w-4" />
-                Documento
+                {t("document")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => void startRecording()}>
                 <Mic className="mr-2 h-4 w-4" />
-                Nota de voz
+                {t("voiceNote")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -561,8 +564,8 @@ export function MessageComposer({
             variant="ghost"
             size="sm"
             canAct={!readOnly}
-            gateReason="enviar mensajes"
-            title={readOnly ? undefined : "Enviar plantilla"}
+            gateReason="send messages"
+            title={readOnly ? undefined : t("sendTemplate")}
             className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-foreground"
             onClick={onOpenTemplates}
           >
@@ -575,7 +578,7 @@ export function MessageComposer({
             canAct={!readOnly}
             gateReason="send messages"
             disabled={drafting}
-            title={readOnly ? undefined : "Draft a reply with AI"}
+            title={readOnly ? undefined : t("draftWithAI")}
             className="h-9 w-9 shrink-0 p-0 text-muted-foreground hover:text-primary"
             onClick={handleDraft}
           >
@@ -593,17 +596,17 @@ export function MessageComposer({
             onKeyDown={handleKeyDown}
             placeholder={
               readOnly
-                ? "Solo lectura — los lectores pueden ver pero no responder"
+                ? t("readOnlyPlaceholder")
                 : sessionExpired
-                  ? "Sesión expirada: usa una plantilla"
-                  : "Escribe un mensaje... (Mayús+Intro para nueva línea)"
+                  ? t("sessionExpiredPlaceholder")
+                  : t("typeMessagePlaceholder")
             }
             disabled={sessionExpired || readOnly}
             rows={1}
             // Textarea keeps its own inline title — the GatedButton
             // wrapping pattern doesn't apply to non-button inputs.
             // The placeholder text also surfaces the read-only state.
-            title={readOnly ? "Solo lectura — tu rol no puede enviar mensajes" : undefined}
+            title={readOnly ? t("readOnlyTitle") : undefined}
             className={cn(
               "flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50",
               (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"
@@ -613,7 +616,7 @@ export function MessageComposer({
           <GatedButton
             size="sm"
             canAct={!readOnly}
-            gateReason="enviar mensajes"
+            gateReason="send messages"
             disabled={!text.trim() || sessionExpired || sending}
             onClick={handleSend}
             className="h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40"
@@ -628,7 +631,7 @@ export function MessageComposer({
           under the textarea left edge. */}
       {!draft && !recording && (
         <p className="mt-1 pl-[5.5rem] text-[10px] text-muted-foreground">
-          Toca el ✨ para redactar una respuesta con IA; puedes editarla antes de enviarla
+          {t("draftHint")}
         </p>
       )}
     </div>
@@ -648,6 +651,7 @@ function MediaDraftPreview({
   onCaptionChange,
   onDiscard,
   onSend,
+  t,
 }: {
   draft: MediaDraft;
   busy: boolean;
@@ -655,6 +659,7 @@ function MediaDraftPreview({
   onCaptionChange: (caption: string) => void;
   onDiscard: () => void;
   onSend: () => void;
+  t: ReturnType<typeof useTranslations>;
 }) {
   return (
     <div className="rounded-xl border border-border bg-muted/40 p-3">
@@ -684,7 +689,7 @@ function MediaDraftPreview({
         <button
           type="button"
           onClick={onDiscard}
-          aria-label="Quitar adjunto"
+          aria-label={t("removeAttachment")}
           className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <X className="h-4 w-4" />
@@ -703,14 +708,14 @@ function MediaDraftPreview({
                 onSend();
               }
             }}
-            placeholder="Añadir una descripción…"
+            placeholder={t("addCaption")}
             className="flex-1 rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50"
           />
         )}
         <GatedButton
           size="sm"
           canAct={!readOnly}
-          gateReason="enviar mensajes"
+          gateReason="send messages"
           disabled={busy}
           onClick={onSend}
           className={cn(
