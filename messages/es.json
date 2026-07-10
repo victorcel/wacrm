@@ -193,7 +193,16 @@
       "sendTemplate": "Enviar plantilla",
       "draftWithAI": "Redactar una respuesta con IA",
       "addCaption": "Agregar un pie de foto…",
-      "removeAttachment": "Quitar adjunto"
+      "removeAttachment": "Quitar adjunto",
+      "moreActions": "Más",
+      "interactiveMessage": "Mensaje interactivo",
+      "quickReplies": "Respuestas rápidas",
+      "quickRepliesEmpty": "Aún no hay respuestas rápidas. Agrega algunas en Configuración → Respuestas rápidas.",
+      "saveAsQuickReply": "Guardar como respuesta rápida",
+      "send": "Enviar",
+      "quickReplyNamePrompt": "Nombra esta respuesta rápida:",
+      "quickReplySaved": "Guardada como respuesta rápida.",
+      "quickReplySaveError": "No se pudo guardar la respuesta rápida."
     },
     "bubble": {
       "photo": "Foto",
@@ -811,6 +820,8 @@
     "builder": {
       "steps": {
         "send_message": "Enviar mensaje",
+        "send_buttons": "Enviar botones",
+        "send_list": "Enviar lista",
         "send_template": "Enviar plantilla",
         "add_tag": "Agregar etiqueta",
         "remove_tag": "Quitar etiqueta",
@@ -835,6 +846,10 @@
           "label": "Coincidencia de palabra clave",
           "hint": "El mensaje contiene palabra(s) clave específica(s)"
         },
+        "interactive_reply": {
+          "label": "Respuesta con botón / lista",
+          "hint": "El cliente toca un botón o una fila de la lista cuyo id coincide — encadena menús entre automatizaciones"
+        },
         "new_contact_created": {
           "label": "Nuevo contacto creado",
           "hint": "Cuando se crea un contacto automáticamente a partir de un mensaje entrante"
@@ -856,6 +871,9 @@
       "triggerType": "Tipo de disparador",
       "keywords": "Palabras clave",
       "keywordsHint": "Lista separada por comas (ej. hola, ayuda, comprar)",
+      "replyIds": "IDs de respuesta",
+      "replyIdsHint": "si, no, mas_info",
+      "replyIdsHelp": "Lista de ids de botón/fila de lista separados por comas para coincidencia exacta. Usa los mismos ids que definiste en un paso de Enviar botones / Enviar lista.",
       "schedule": "Horario",
       "scheduleHint": "Expresión cron (ej. 0 9 * * 1-5)",
       "active": "Activa",
