@@ -27,9 +27,10 @@ export async function POST(request: Request) {
     }
 
     const provider = body.provider as AiProvider
-    if (provider !== 'openai' && provider !== 'anthropic') {
+    const validProviders: AiProvider[] = ['openai', 'anthropic', 'nvidia', 'ollama']
+    if (!validProviders.includes(provider)) {
       return NextResponse.json(
-        { error: 'provider must be "openai" or "anthropic"' },
+        { error: 'provider must be "openai", "anthropic", "nvidia", or "ollama"' },
         { status: 400 },
       )
     }

@@ -128,6 +128,123 @@ describe('generateReply — OpenAI', () => {
   })
 })
 
+describe('generateReply — NVIDIA', () => {
+  it('calls the chat completions endpoint and returns the reply', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      okResponse({
+        choices: [{ message: { content: 'Sure — happy to help!' } }],
+        usage: { prompt_tokens: 42, completion_tokens: 8, total_tokens: 50 },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await generateReply({
+      config: config({ provider: 'nvidia', apiKey: 'nvapi-test' }),
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'Hi' }],
+    })
+
+    expect(res).toEqual({
+      text: 'Sure — happy to help!',
+      handoff: false,
+      usage: { promptTokens: 42, completionTokens: 8, totalTokens: 50 },
+    })
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toContain('integrate.api.nvidia.com')
+    expect(opts.headers.Authorization).toBe('Bearer nvapi-test')
+  })
+
+  it('maps a 401 to an invalid_key AiError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        errResponse(401, { error: { message: 'Incorrect API key' } }),
+      ),
+    )
+
+    await expect(
+      generateReply({
+        config: config({ provider: 'nvidia' }),
+        systemPrompt: 'sys',
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_key', status: 401 })
+  })
+
+  it('throws on an empty completion', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(okResponse({ choices: [{ message: { content: '' } }] })),
+    )
+    await expect(
+      generateReply({
+        config: config({ provider: 'nvidia' }),
+        systemPrompt: 'sys',
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
+    ).rejects.toBeInstanceOf(AiError)
+  })
+})
+
+describe('generateReply — Ollama', () => {
+  it('calls the native chat endpoint and returns the reply', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      okResponse({
+        message: { role: 'assistant', content: 'Sure — happy to help!' },
+        prompt_eval_count: 42,
+        eval_count: 8,
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await generateReply({
+      config: config({ provider: 'ollama', apiKey: 'ollama-test-key' }),
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'Hi' }],
+    })
+
+    expect(res).toEqual({
+      text: 'Sure — happy to help!',
+      handoff: false,
+      usage: { promptTokens: 42, completionTokens: 8, totalTokens: 50 },
+    })
+    const [url, opts] = fetchMock.mock.calls[0]
+    expect(url).toContain('ollama.com/api/chat')
+    expect(opts.headers.Authorization).toBe('Bearer ollama-test-key')
+  })
+
+  it('maps a 401 to an invalid_key AiError', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        errResponse(401, { error: { message: 'Incorrect API key' } }),
+      ),
+    )
+
+    await expect(
+      generateReply({
+        config: config({ provider: 'ollama' }),
+        systemPrompt: 'sys',
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_key', status: 401 })
+  })
+
+  it('throws on an empty completion', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(okResponse({ message: { content: '' } })),
+    )
+    await expect(
+      generateReply({
+        config: config({ provider: 'ollama' }),
+        systemPrompt: 'sys',
+        messages: [{ role: 'user', content: 'Hi' }],
+      }),
+    ).rejects.toBeInstanceOf(AiError)
+  })
+})
+
 describe('generateReply — Anthropic', () => {
   it('calls the messages endpoint with the version header and parses text blocks', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
