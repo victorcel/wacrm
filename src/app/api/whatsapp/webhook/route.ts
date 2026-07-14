@@ -57,6 +57,13 @@ interface WhatsAppMessage {
     button_reply?: { id: string; title: string }
     list_reply?: { id: string; title: string; description?: string }
   }
+  /**
+   * Set when the customer taps a quick-reply button on a message
+   * *template* we sent (as opposed to an interactive message, which
+   * arrives as `interactive.button_reply` instead). `payload` is the id
+   * we set on the template's quick-reply button component.
+   */
+  button?: { text: string; payload: string }
   /** Present when the customer swipe-replies to one of our messages. */
   context?: { id: string }
 }
@@ -652,8 +659,10 @@ async function processMessage(
   const contentType = ALLOWED_CONTENT_TYPES.has(message.type)
     ? message.type
     : message.type === 'sticker'
-      ? 'image'   // stickers are images
-      : 'text'    // reaction, unknown → text fallback
+      ? 'image'       // stickers are images
+      : message.type === 'button'
+        ? 'interactive' // template quick-reply tap; no separate DB value exists
+        : 'text'      // reaction, unknown → text fallback
 
   // Determine whether this is the contact's very first inbound message
   // BEFORE we insert, so the count is accurate. Covers the case where
@@ -962,6 +971,21 @@ async function parseMessageContent(
       }
       return { ...empty, contentText: '[Interactive reply]' }
     }
+
+    case 'button':
+      // The customer tapped a quick-reply button on a *template* message
+      // we sent. Meta reports this as its own top-level type (distinct
+      // from `interactive.button_reply`, which only applies to interactive
+      // messages), with the button title in `text` and our button id in
+      // `payload`.
+      if (message.button) {
+        return {
+          ...empty,
+          contentText: message.button.text || message.button.payload,
+          interactiveReplyId: message.button.payload || null,
+        }
+      }
+      return { ...empty, contentText: '[Button reply]' }
 
     default:
       return {
