@@ -10,7 +10,6 @@ import {
 } from "@/lib/inbox/conversations";
 import type { Conversation, Message, Contact, ConversationStatus } from "@/types";
 import { useRealtime } from "@/hooks/use-realtime";
-import { useNotificationSound } from "@/hooks/use-notification-sound";
 import { ConversationList } from "@/components/inbox/conversation-list";
 import { MessageThread } from "@/components/inbox/message-thread";
 import { ContactSidebar } from "@/components/inbox/contact-sidebar";
@@ -32,7 +31,6 @@ export default function InboxPage() {
    * automatically instead of showing the empty center panel.
    */
   const deepLinkConvId = searchParams.get("c");
-  const { play: playNotificationSound } = useNotificationSound();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversation, setActiveConversation] =
@@ -209,10 +207,6 @@ export default function InboxPage() {
       const newMsg = event.new;
 
       if (event.eventType === "INSERT") {
-        if (newMsg.sender_type === "customer") {
-          playNotificationSound();
-        }
-
         // Add to messages if it belongs to active conversation
         if (
           activeConversation &&
@@ -267,7 +261,7 @@ export default function InboxPage() {
         );
       }
     },
-    [activeConversation, hydrateConversation, playNotificationSound]
+    [activeConversation, hydrateConversation]
   );
 
   // Handle realtime conversation events
