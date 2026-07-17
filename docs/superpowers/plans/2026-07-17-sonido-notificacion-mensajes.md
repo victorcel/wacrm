@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Reproducir un sonido corto cuando llega un mensaje nuevo de un contacto mientras el usuario tiene `/inbox` abierto.
+**Goal:** Reproducir un sonido corto cuando llega un mensaje nuevo de un contacto, sin importar en qué pantalla del dashboard esté el usuario (no solo en `/inbox`).
 
-**Architecture:** Un hook `useNotificationSound` encapsula un único `<audio>` precargado (vía `useRef`) y expone `play()`. Se engancha en `handleMessageEvent` de `inbox/page.tsx`, filtrando por `sender_type === 'customer'` para que solo suenen mensajes entrantes, nunca los que envía el propio agente o el bot.
+**Architecture:** Un hook `useNotificationSound` encapsula un único `<audio>` precargado (vía `useRef`) y expone `play()`. Un componente headless nuevo, `NewMessageSoundListener`, abre su propio canal Supabase Realtime (mismo patrón que `useTotalUnread`/`useUnreadNotifications`) escuchando INSERTs en `messages`, filtra por `sender_type === 'customer'`, y llama a `play()`. Se monta una sola vez en `DashboardShellInner` (junto a `PresenceHeartbeat`), por lo que suena en cualquier ruta del dashboard mientras la pestaña esté abierta.
+
+**Revisión de alcance (post-implementación inicial):** Las Tasks 1-2 originales enganchaban el sonido dentro de `handleMessageEvent` en `inbox/page.tsx`, alcance que luego se amplió a "toda la app". Mantener ambos enganches sonaría el mensaje dos veces cuando el usuario está dentro de `/inbox`. La Task 2 de este plan revierte ese enganche específico de `inbox/page.tsx` (Task 2 original, ya commiteada) y lo reemplaza por el listener global — dejando el sonido en un único lugar.
 
 **Tech Stack:** Next.js 16 (App Router), React 19, TypeScript, HTML5 `<audio>` (Web API nativa, sin librerías nuevas).
 
@@ -70,89 +72,123 @@ git commit -m "feat: add useNotificationSound hook for new-message alerts"
 
 ---
 
-### Task 2: Enganchar el sonido en el inbox
+### Task 2: Revertir el enganche local y crear el listener global
 
 **Files:**
-- Modify: `src/app/(dashboard)/inbox/page.tsx:1-18` (imports)
-- Modify: `src/app/(dashboard)/inbox/page.tsx:205-265` (`handleMessageEvent`)
+- Modify: `src/app/(dashboard)/inbox/page.tsx` (revertir el enganche de la Task 2 original)
+- Create: `src/components/notifications/new-message-sound-listener.tsx`
+- Modify: `src/app/(dashboard)/dashboard-shell.tsx` (montar el listener)
 
-- [ ] **Step 1: Añadir el import del hook**
+- [ ] **Step 1: Revertir el enganche en `inbox/page.tsx`**
 
-En `src/app/(dashboard)/inbox/page.tsx`, junto a los demás imports de hooks (línea 12):
+Este repositorio ya tiene commiteado un cambio (task previa) que añadió el import de `useNotificationSound`, su instanciación, el disparo en `handleMessageEvent`, y la entrada en el `useCallback` deps array. Revertir esos 4 puntos exactamente, dejando `inbox/page.tsx` como estaba antes de esa task:
 
+1. Quitar el import:
 ```typescript
-import { useRealtime } from "@/hooks/use-realtime";
 import { useNotificationSound } from "@/hooks/use-notification-sound";
 ```
 
-- [ ] **Step 2: Instanciar el hook dentro del componente**
-
-Dentro de `export default function InboxPage()`, junto a los demás hooks de nivel superior (cerca de la línea 35, antes de los `useState`):
-
+2. Quitar la instanciación del hook (línea justo después de `deepLinkConvId`):
 ```typescript
-export default function InboxPage() {
-  const t = useTranslations("Inbox.page");
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const { play: playNotificationSound } = useNotificationSound();
 ```
 
-- [ ] **Step 3: Disparar el sonido en `handleMessageEvent`**
-
-En `src/app/(dashboard)/inbox/page.tsx`, dentro de `handleMessageEvent` (línea 205), rama `event.eventType === "INSERT"` (línea 209). El bloque actual es:
-
+3. Quitar el bloque disparador dentro de `handleMessageEvent`, rama `INSERT`:
 ```typescript
-      if (event.eventType === "INSERT") {
-        // Add to messages if it belongs to active conversation
-        if (
-          activeConversation &&
-          newMsg.conversation_id === activeConversation.id
-        ) {
-```
-
-Se modifica a:
-
-```typescript
-      if (event.eventType === "INSERT") {
         if (newMsg.sender_type === "customer") {
           playNotificationSound();
         }
 
-        // Add to messages if it belongs to active conversation
-        if (
-          activeConversation &&
-          newMsg.conversation_id === activeConversation.id
-        ) {
 ```
+(dejando la línea en blanco original antes de `// Add to messages if it belongs to active conversation`)
 
-- [ ] **Step 4: Añadir `playNotificationSound` a las dependencias de `useCallback`**
-
-El `useCallback` de `handleMessageEvent` cierra en (línea 264 original):
-
+4. Quitar `playNotificationSound` del `useCallback` deps array, volviendo a:
 ```typescript
     [activeConversation, hydrateConversation]
   );
 ```
 
-Cambiar a:
+Verificar con `git diff` que el archivo resultante es idéntico a como estaba en el commit previo a la Task 2 original (`7e50e78`) — puedes confirmar con:
+```bash
+git diff 7e50e78 -- "src/app/(dashboard)/inbox/page.tsx"
+```
+Expected: sin diferencias.
+
+- [ ] **Step 2: Crear el componente `NewMessageSoundListener`**
 
 ```typescript
-    [activeConversation, hydrateConversation, playNotificationSound]
-  );
+"use client";
+
+import { useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useNotificationSound } from "@/hooks/use-notification-sound";
+import type { Message } from "@/types";
+
+/**
+ * Headless, app-wide listener for inbound WhatsApp messages. Mounted
+ * once in the dashboard shell (like PresenceHeartbeat) so the
+ * notification sound plays regardless of which page the user is on,
+ * not just while /inbox is open. Own realtime channel — same pattern
+ * as useTotalUnread/useUnreadNotifications — so it doesn't interfere
+ * with the inbox page's "inbox-realtime" channel.
+ */
+export function NewMessageSoundListener() {
+  const { play } = useNotificationSound();
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    const channel = supabase
+      .channel("new-message-sound")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        (payload) => {
+          const newMsg = payload.new as Message;
+          if (newMsg.sender_type === "customer") {
+            play();
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [play]);
+
+  return null;
+}
 ```
 
-(`playNotificationSound` es estable entre renders porque `useNotificationSound` la envuelve en `useCallback` con deps `[]`, así que este cambio no provoca resuscripciones del canal realtime.)
+- [ ] **Step 3: Montar el listener en el shell del dashboard**
 
-- [ ] **Step 5: Verificar que compila y pasa lint**
+En `src/app/(dashboard)/dashboard-shell.tsx`, añadir el import junto a `PresenceHeartbeat`:
 
-Run: `npx tsc --noEmit && npx eslint src/app/\(dashboard\)/inbox/page.tsx src/hooks/use-notification-sound.ts`
+```typescript
+import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
+import { NewMessageSoundListener } from "@/components/notifications/new-message-sound-listener";
+```
+
+Y montarlo junto a `<PresenceHeartbeat />` dentro de `DashboardShellInner`:
+
+```typescript
+      {/* Reports this tab's online/away presence once we know a user is
+          signed in. Headless — renders nothing. */}
+      <PresenceHeartbeat />
+      <NewMessageSoundListener />
+```
+
+- [ ] **Step 4: Verificar que compila y pasa lint**
+
+Run: `npx tsc --noEmit && npx eslint "src/app/(dashboard)/inbox/page.tsx" "src/app/(dashboard)/dashboard-shell.tsx" src/components/notifications/new-message-sound-listener.tsx`
 Expected: sin errores
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add "src/app/(dashboard)/inbox/page.tsx"
-git commit -m "feat: play notification sound on inbound WhatsApp messages"
+git add "src/app/(dashboard)/inbox/page.tsx" "src/app/(dashboard)/dashboard-shell.tsx" src/components/notifications/new-message-sound-listener.tsx
+git commit -m "feat: play new-message sound app-wide instead of only in /inbox"
 ```
 
 ---
@@ -165,24 +201,28 @@ git commit -m "feat: play notification sound on inbound WhatsApp messages"
 
 Run: `npm run dev`
 
-- [ ] **Step 2: Abrir `/inbox` en el navegador y confirmar que el archivo carga**
+- [ ] **Step 2: Abrir el dashboard en el navegador y confirmar que el archivo carga**
 
-Navegar a `http://localhost:3000/inbox` (ajustar puerto si difiere), abrir devtools → Network, y confirmar que `GET /sounds/new-message.mp3` devuelve 200 la primera vez que llega un mensaje (o precargar manualmente visitando `http://localhost:3000/sounds/new-message.mp3` directamente para confirmar que el archivo se sirve).
+Navegar a cualquier ruta del dashboard, p.ej. `http://localhost:3000/contacts` (ajustar puerto si difiere), abrir devtools → Network, y confirmar que `GET /sounds/new-message.mp3` devuelve 200 (o precargar manualmente visitando `http://localhost:3000/sounds/new-message.mp3` directamente para confirmar que el archivo se sirve).
 
-- [ ] **Step 3: Enviar un mensaje de prueba entrante**
+- [ ] **Step 3: Confirmar que suena estando FUERA de `/inbox`**
 
-Desde un número de WhatsApp real conectado al `whatsapp_config` de prueba, enviar un mensaje al número del CRM. Confirmar:
-- El sonido `new-message.mp3` suena en el navegador.
+Con el navegador en una pantalla distinta a `/inbox` (p.ej. `/contacts`, `/notifications`, `/settings`), enviar un mensaje de WhatsApp de prueba real al número conectado. Confirmar:
+- El sonido `new-message.mp3` suena aunque `/inbox` no esté abierto.
 - No aparece ningún error en la consola del navegador.
 
-- [ ] **Step 4: Confirmar que enviar un mensaje desde el CRM NO dispara el sonido**
+- [ ] **Step 4: Confirmar que suena UNA sola vez estando DENTRO de `/inbox`**
+
+Con el navegador en `/inbox`, enviar otro mensaje de prueba. Confirmar que el sonido suena **exactamente una vez** (no dos) — esto valida que la reversión de la Task 2 original eliminó el enganche duplicado y solo queda el listener global.
+
+- [ ] **Step 5: Confirmar que enviar un mensaje desde el CRM NO dispara el sonido**
 
 Desde `/inbox`, responder a una conversación existente usando el composer. Confirmar que el sonido **no** suena (ese INSERT tiene `sender_type: 'agent'`).
 
-- [ ] **Step 5: Confirmar que mensajes automáticos de bot/flow tampoco disparan el sonido**
+- [ ] **Step 6: Confirmar que mensajes automáticos de bot/flow tampoco disparan el sonido**
 
 Si hay un flow o auto-respuesta de IA configurado en el entorno de prueba, disparar una respuesta automática y confirmar que no suena (ese INSERT tiene `sender_type: 'bot'`). Si no hay ninguno configurado, omitir este paso — ya está cubierto por el filtro `sender_type === 'customer'` verificado en el código.
 
-- [ ] **Step 6: Confirmar que mensajes consecutivos rápidos vuelven a sonar**
+- [ ] **Step 7: Confirmar que mensajes consecutivos rápidos vuelven a sonar**
 
 Enviar dos mensajes de WhatsApp seguidos con pocos segundos de diferencia (antes de que termine de sonar el primero). Confirmar que el segundo mensaje también dispara el sonido desde el inicio (no se pisan ni se silencian).
