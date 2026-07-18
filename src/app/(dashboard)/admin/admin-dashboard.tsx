@@ -31,6 +31,7 @@ import {
 
 import { CreateCompanyDialog, type PlanOption } from "./create-company-dialog";
 import { RecordPaymentDialog } from "./record-payment-dialog";
+import { EditCompanyDialog } from "./edit-company-dialog";
 import { PaymentHistoryDialog } from "./payment-history-dialog";
 import { PlansPanel, type PlanRow } from "./plans-panel";
 import { formatDate, statusMeta } from "./utils";
@@ -62,6 +63,7 @@ export function AdminDashboard() {
   const [createOpen, setCreateOpen] = useState(false);
   const [payTarget, setPayTarget] = useState<{ id: string; name: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; name: string } | null>(null);
+  const [editTarget, setEditTarget] = useState<{ id: string; name: string } | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<Company | null>(null);
   const [suspending, setSuspending] = useState(false);
 
@@ -265,6 +267,14 @@ export function AdminDashboard() {
                                 >
                                   Registrar pago
                                 </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setEditTarget({ id: c.id, name: c.name })}
+                                  className="border-border text-muted-foreground hover:bg-muted"
+                                >
+                                  Editar
+                                </Button>
                                 {status === "active" ? (
                                   <Button
                                     size="sm"
@@ -321,6 +331,13 @@ export function AdminDashboard() {
         onOpenChange={(next) => {
           if (!next) setHistoryTarget(null);
         }}
+      />
+      <EditCompanyDialog
+        company={editTarget}
+        onOpenChange={(next) => {
+          if (!next) setEditTarget(null);
+        }}
+        onSaved={loadData}
       />
       <ConfirmDialog
         open={!!suspendTarget}
