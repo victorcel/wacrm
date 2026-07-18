@@ -361,7 +361,11 @@
         "activity": "Actividad",
         "notes": "Notas",
         "custom": "Campos personalizados",
-        "deals": "Negocios"
+        "deals": "Negocios",
+        "tags": "Etiquetas",
+        "noTags": "Sin etiquetas",
+        "noDeals": "Sin negocios",
+        "addNotePlaceholder": "Añadir una nota..."
       },
       "actions": {
         "edit": "Editar",
@@ -1491,6 +1495,7 @@
       "appearance": "Apariencia",
       "whatsapp": "WhatsApp",
       "templates": "Plantillas",
+      "quick-replies": "Respuestas rápidas",
       "fields": "Campos y etiquetas",
       "deals": "Negocios y moneda",
       "members": "Miembros del equipo",

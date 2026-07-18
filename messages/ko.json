@@ -38,7 +38,8 @@
     "defaultAvatar": "아바타",
     "menuProfile": "프로필",
     "menuSettings": "설정",
-    "menuSignOut": "로그아웃"
+    "menuSignOut": "로그아웃",
+    "adminPanel": "관리자 패널"
   },
   "Header": {
     "dashboard": "대시보드",
@@ -216,7 +217,11 @@
       "interactiveReply": "[인터랙티브 응답]",
       "unsupported": "[지원되지 않는 메시지 형식]",
       "aiBadge": "AI",
-      "aiBadgeTitle": "AI 어시스턴트가 자동으로 전송함"
+      "aiBadgeTitle": "AI 어시스턴트가 자동으로 전송함",
+      "download": "다운로드",
+      "zoomIn": "확대",
+      "zoomOut": "축소",
+      "zoomReset": "확대/축소 초기화"
     },
     "actions": {
       "reply": "답장",
@@ -358,6 +363,7 @@
         "notes": "메모",
         "custom": "커스텀 필드",
         "deals": "딜",
+        "tags": "태그",
         "noTags": "태그 없음",
         "noDeals": "딜 없음",
         "addNotePlaceholder": "메모 추가..."
@@ -1500,10 +1506,32 @@
       "appearance": "화면 설정",
       "whatsapp": "WhatsApp",
       "templates": "템플릿",
+      "quick-replies": "빠른 답장",
       "fields": "필드 & 태그",
       "deals": "딜 & 통화",
       "members": "팀원",
+      "subscription": "구독",
       "api": "API 키"
+    },
+    "subscription": {
+      "title": "구독",
+      "description": "활성 요금제, 사용량 한도 및 워크스페이스 갱신일입니다.",
+      "status": {
+        "active": "활성",
+        "trialing": "체험 기간",
+        "suspended": "일시 정지됨",
+        "expired": "만료됨",
+        "inactive": "비활성"
+      },
+      "currentPlan": "현재 요금제",
+      "validUntil": "유효 기간: ",
+      "noExpiration": "만료 없음",
+      "planUsage": "요금제 사용량",
+      "seatsLabel": "좌석 (팀원)",
+      "broadcastsLabel": "이번 달 브로드캐스트",
+      "unlimited": "무제한",
+      "loadError": "구독 정보를 불러올 수 없습니다.",
+      "noData": "데이터 없음"
     },
     "groups": {
       "account": "계정",
