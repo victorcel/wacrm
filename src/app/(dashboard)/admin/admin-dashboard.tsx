@@ -32,6 +32,7 @@ import {
 import { CreateCompanyDialog, type PlanOption } from "./create-company-dialog";
 import { RecordPaymentDialog } from "./record-payment-dialog";
 import { EditCompanyDialog } from "./edit-company-dialog";
+import { CompanyMembersDialog } from "./company-members-dialog";
 import { PaymentHistoryDialog } from "./payment-history-dialog";
 import { PlansPanel, type PlanRow } from "./plans-panel";
 import { formatDate, statusMeta } from "./utils";
@@ -64,6 +65,7 @@ export function AdminDashboard() {
   const [payTarget, setPayTarget] = useState<{ id: string; name: string } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<{ id: string; name: string } | null>(null);
   const [editTarget, setEditTarget] = useState<{ id: string; name: string } | null>(null);
+  const [membersTarget, setMembersTarget] = useState<{ id: string; name: string } | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<Company | null>(null);
   const [suspending, setSuspending] = useState(false);
 
@@ -275,6 +277,14 @@ export function AdminDashboard() {
                                 >
                                   Editar
                                 </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setMembersTarget({ id: c.id, name: c.name })}
+                                  className="border-border text-muted-foreground hover:bg-muted"
+                                >
+                                  Miembros
+                                </Button>
                                 {status === "active" ? (
                                   <Button
                                     size="sm"
@@ -338,6 +348,13 @@ export function AdminDashboard() {
           if (!next) setEditTarget(null);
         }}
         onSaved={loadData}
+      />
+      <CompanyMembersDialog
+        company={membersTarget}
+        allCompanies={companies.map((c) => ({ id: c.id, name: c.name }))}
+        onOpenChange={(next) => {
+          if (!next) setMembersTarget(null);
+        }}
       />
       <ConfirmDialog
         open={!!suspendTarget}
