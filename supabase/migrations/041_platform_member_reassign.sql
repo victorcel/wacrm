@@ -114,3 +114,67 @@ $$;
 ALTER FUNCTION public.platform_reassign_member(UUID, UUID, account_role_enum) OWNER TO postgres;
 REVOKE ALL ON FUNCTION public.platform_reassign_member(UUID, UUID, account_role_enum) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.platform_reassign_member(UUID, UUID, account_role_enum) TO authenticated;
+
+-- ============================================================
+-- platform_delete_account(p_account_id)
+--
+-- Deletes a company. Refuses if the account has more than one
+-- member (the caller must reassign/release the extra members via
+-- platform_reassign_member first — this avoids accidentally
+-- stranding a team). If exactly one member remains (necessarily
+-- the owner, since every account always has exactly one owner),
+-- that member is released to a fresh personal account first (same
+-- logic as platform_reassign_member's release branch) so no
+-- profile is ever left pointing at a deleted account_id, then the
+-- now-empty account is deleted.
+--
+-- Refusal codes (SQLSTATE):
+--   42501 — caller is not a platform admin
+--   22023 — account not found, or has 2+ members
+-- ============================================================
+CREATE OR REPLACE FUNCTION public.platform_delete_account(
+  p_account_id UUID
+) RETURNS UUID  -- released owner's new personal account id, or NULL
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_member_count INT;
+  v_sole_member_user_id UUID;
+  v_released_account_id UUID;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM platform_admins WHERE user_id = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'Platform admin access required' USING ERRCODE = '42501';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM accounts WHERE id = p_account_id) THEN
+    RAISE EXCEPTION 'Account not found' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT COUNT(*) INTO v_member_count
+  FROM profiles WHERE account_id = p_account_id;
+
+  IF v_member_count > 1 THEN
+    RAISE EXCEPTION 'Account has % members; reassign or release them before deleting', v_member_count
+      USING ERRCODE = '22023';
+  END IF;
+
+  IF v_member_count = 1 THEN
+    SELECT user_id INTO v_sole_member_user_id
+    FROM profiles WHERE account_id = p_account_id;
+
+    v_released_account_id := platform_reassign_member(v_sole_member_user_id, NULL, NULL);
+  END IF;
+
+  DELETE FROM accounts WHERE id = p_account_id;
+
+  RETURN v_released_account_id;
+END;
+$$;
+
+ALTER FUNCTION public.platform_delete_account(UUID) OWNER TO postgres;
+REVOKE ALL ON FUNCTION public.platform_delete_account(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.platform_delete_account(UUID) TO authenticated;
