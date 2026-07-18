@@ -68,6 +68,8 @@ export function AdminDashboard() {
   const [membersTarget, setMembersTarget] = useState<{ id: string; name: string } | null>(null);
   const [suspendTarget, setSuspendTarget] = useState<Company | null>(null);
   const [suspending, setSuspending] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Company | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -126,6 +128,26 @@ export function AdminDashboard() {
       setSuspendTarget(null);
     } finally {
       setSuspending(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/companies/${deleteTarget.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}));
+        toast.error(payload.error || "No se pudo eliminar la empresa");
+        return;
+      }
+      toast.success("Empresa eliminada");
+      setDeleteTarget(null);
+      await loadData();
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -304,6 +326,14 @@ export function AdminDashboard() {
                                     Activar
                                   </Button>
                                 )}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setDeleteTarget(c)}
+                                  className="border-border text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                >
+                                  Eliminar
+                                </Button>
                               </div>
                             )}
                           </TableCell>
@@ -366,6 +396,17 @@ export function AdminDashboard() {
         destructive
         loading={suspending}
         onConfirm={confirmSuspend}
+      />
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(next) => { if (!next) setDeleteTarget(null); }}
+        title="¿Eliminar empresa?"
+        description={`Esto elimina "${deleteTarget?.name}" de forma permanente. Solo funciona si la empresa no tiene miembros además de su propietario — si tiene un equipo, muévelos o libéralos primero desde "Miembros".`}
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        destructive
+        loading={deleting}
+        onConfirm={confirmDelete}
       />
     </div>
   );
