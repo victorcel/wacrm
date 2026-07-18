@@ -24,8 +24,12 @@ import { createClient } from "@/lib/supabase/server";
 
 function safeNext(next: string | null): string {
   // Only allow same-origin relative paths — never redirect off-site
-  // based on a query param an attacker could craft.
-  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+  // based on a query param an attacker could craft. Reject values
+  // starting with "//" (protocol-relative) and any embedded
+  // backslash — the WHATWG URL parser normalizes a leading "/\" into
+  // "//" during resolution, turning "/\evil.com" into a redirect to
+  // https://evil.com when passed through `new URL(next, origin)`.
+  if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\")) {
     return "/dashboard";
   }
   return next;
