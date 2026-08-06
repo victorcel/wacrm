@@ -60,7 +60,7 @@ This is a **template**, not a product. Forking means you get:
   modules you don't, redesign anything. The stack is boring on
   purpose (Next.js + Supabase + Tailwind) so the learning curve is
   short.
-- **Zero ops to start** — [Hostinger](https://www.hostinger.com/web-apps-hosting)
+- **Zero ops to start** — [Hostinger](https://www.hostinger.com/web-apps-hosting?REFERRALCODE=WACRMHOST)
   Managed Node.js deploys a fork in a few clicks. No Docker, no
   Kubernetes, no infra team needed.
   ([See below ↓](#-deploy-on-hostinger-recommended))

@@ -60,13 +60,28 @@ interface NewRecipient {
 
 export async function POST(request: Request) {
   try {
-    // Auth + subscription gate. Uses requireActiveSubscription so an
-    // expired/suspended account is blocked here even if it bypasses
-    // the dashboard layout gate (belt-and-suspenders).
+    // Requires the 'agent' role — `canSendMessages` in lib/auth/roles is
+    // explicit that running broadcasts is a write operation and that
+    // viewers are read-only.
+    //
+    // This endpoint writes NOTHING to the database: it reads the config
+    // and template, then calls Meta directly. So unlike the rest of the
+    // app there was no RLS policy backstopping a missing role check —
+    // resolving `account_id` straight off the profile (which only needs
+    // 'viewer') was the ONLY gate, and it let a viewer blast a template
+    // to arbitrary phone numbers from the account's WhatsApp number.
+    // Nothing about that is recoverable after the fact, so the check has
+    // to happen here.
+    //
+    // requireActiveSubscription wraps requireRole, so the role gate above
+    // still applies; it additionally blocks expired/suspended accounts
+    // that bypass the dashboard layout gate (belt-and-suspenders).
     const ctx = await requireActiveSubscription('agent')
-    const { supabase, userId, accountId } = ctx
+    const { supabase, accountId, userId } = ctx
 
-    // Per-user broadcast budget.
+    // Per-user broadcast budget. Note: this limits how often a user
+    // can *start* a campaign, not how many messages go out inside
+    // one — the fan-out loop below runs without additional gating.
     const limit = checkRateLimit(`broadcast:${userId}`, RATE_LIMITS.broadcast)
     if (!limit.success) {
       return rateLimitResponse(limit)
@@ -252,6 +267,10 @@ export async function POST(request: Request) {
       results,
     })
   } catch (error) {
+    // requireActiveSubscription throws Unauthorized/Forbidden/PaymentRequired;
+    // toErrorResponse maps those to 401/403/402 and collapses anything else
+    // to a generic 500.
+    console.error('Error in WhatsApp broadcast POST:', error)
     return toErrorResponse(error)
   }
 }

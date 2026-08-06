@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { Message, MessageReaction } from "@/types";
 import {
@@ -8,24 +7,23 @@ import {
   Check,
   CheckCheck,
   XCircle,
-  FileText,
   MapPin,
   LayoutTemplate,
-  ImageOff,
   CornerDownLeft,
   Sparkles,
-  Download,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
 import { MessageReactions } from "./message-reactions";
+import {
+  MediaAudioBubble,
+  MediaDocumentBubble,
+  MediaImageBubble,
+  MediaUnavailable,
+  MediaVideoBubble,
+} from "./message-media";
 import { InteractivePreview } from "@/components/interactive/interactive-preview";
 import { useTranslations } from "next-intl";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 
 interface MessageBubbleProps {
   message: Message;
@@ -34,6 +32,12 @@ interface MessageBubbleProps {
   reactions?: MessageReaction[];
   currentUserId?: string;
   onToggleReaction?: (emoji: string) => void;
+  /**
+   * Opens the thread's media viewer on this message. Only images and videos
+   * call it; omitted when the parent renders no viewer, in which case media
+   * stays inline and non-clickable.
+   */
+  onOpenMedia?: (messageId: string) => void;
 }
 
 function StatusIcon({ status }: { status: Message["status"] }) {
@@ -53,286 +57,19 @@ function StatusIcon({ status }: { status: Message["status"] }) {
   }
 }
 
-function MediaUnavailable({ label, t }: { label: string, t: ReturnType<typeof useTranslations> }) {
-  return (
-    <div className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-      <ImageOff className="h-4 w-4 shrink-0 text-muted-foreground" />
-      <span>{t("unavailable", { label })}</span>
-    </div>
-  );
-}
-
-const ZOOM_MIN = 1;
-const ZOOM_MAX = 4;
-const ZOOM_STEP = 0.5;
-
-function ImageLightbox({
-  src,
-  alt,
-  open,
-  onOpenChange,
+function MessageContent({
+  message,
+  t,
+  onOpenMedia,
 }: {
-  src: string;
-  alt: string;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  message: Message;
+  t: ReturnType<typeof useTranslations>;
+  onOpenMedia?: (messageId: string) => void;
 }) {
-  const t = useTranslations("Inbox.bubble");
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const dragState = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+  // Passed to the media bubbles as a no-arg callback; `undefined` when the
+  // parent wired up no viewer, which is what makes them non-clickable.
+  const openMedia = onOpenMedia ? () => onOpenMedia(message.id) : undefined;
 
-  const resetView = useCallback(() => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  }, []);
-
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      onOpenChange(next);
-      if (!next) resetView();
-    },
-    [onOpenChange, resetView],
-  );
-
-  const clampZoom = (value: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value));
-
-  const zoomIn = useCallback(() => {
-    setZoom((z) => clampZoom(z + ZOOM_STEP));
-  }, []);
-
-  const zoomOut = useCallback(() => {
-    setZoom((z) => {
-      const next = clampZoom(z - ZOOM_STEP);
-      if (next === ZOOM_MIN) setPan({ x: 0, y: 0 });
-      return next;
-    });
-  }, []);
-
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    setZoom((z) => {
-      const next = clampZoom(z - e.deltaY * 0.01);
-      if (next === ZOOM_MIN) setPan({ x: 0, y: 0 });
-      return next;
-    });
-  }, []);
-
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (zoom <= ZOOM_MIN) return;
-      dragState.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
-      setIsDragging(true);
-      (e.target as Element).setPointerCapture(e.pointerId);
-    },
-    [zoom, pan],
-  );
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragState.current) return;
-    const dx = e.clientX - dragState.current.x;
-    const dy = e.clientY - dragState.current.y;
-    setPan({ x: dragState.current.panX + dx, y: dragState.current.panY + dy });
-  }, []);
-
-  const handlePointerUp = useCallback(() => {
-    dragState.current = null;
-    setIsDragging(false);
-  }, []);
-
-  const handleDownload = useCallback(async () => {
-    // src is already a resolved blob: URL (proxy) or direct URL, so we can
-    // fetch it as-is (or reuse the blob: URL directly, no re-fetch needed).
-    try {
-      if (src.startsWith("blob:")) {
-        const a = document.createElement("a");
-        a.href = src;
-        a.download = "";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        return;
-      }
-      const res = await fetch(src);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = blobUrl;
-      a.download = "";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      window.open(src, "_blank", "noopener,noreferrer");
-    }
-  }, [src]);
-
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent
-        className="flex max-w-[calc(100%-2rem)] items-center justify-center border-none bg-transparent p-0 shadow-none ring-0 sm:max-w-[calc(100%-4rem)]"
-        showCloseButton
-      >
-        <div className="absolute top-2 left-2 z-10 flex items-center gap-1 rounded-lg bg-background/80 p-1 backdrop-blur-sm">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={zoomOut}
-            disabled={zoom <= ZOOM_MIN}
-            title={t("zoomOut")}
-          >
-            <ZoomOut />
-            <span className="sr-only">{t("zoomOut")}</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={zoomIn}
-            disabled={zoom >= ZOOM_MAX}
-            title={t("zoomIn")}
-          >
-            <ZoomIn />
-            <span className="sr-only">{t("zoomIn")}</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={resetView}
-            disabled={zoom === ZOOM_MIN && pan.x === 0 && pan.y === 0}
-            title={t("zoomReset")}
-          >
-            <RotateCcw />
-            <span className="sr-only">{t("zoomReset")}</span>
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            onClick={handleDownload}
-            title={t("download")}
-          >
-            <Download />
-            <span className="sr-only">{t("download")}</span>
-          </Button>
-        </div>
-        <div
-          className="flex max-h-[85vh] max-w-full items-center justify-center overflow-hidden"
-          onWheel={handleWheel}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={src}
-            alt={alt}
-            draggable={false}
-            className={cn(
-              "max-h-[85vh] max-w-full rounded-lg object-contain transition-transform duration-100 select-none",
-              zoom > ZOOM_MIN ? (isDragging ? "cursor-grabbing" : "cursor-grab") : "cursor-zoom-in",
-            )}
-            style={{
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-            }}
-            onClick={() => {
-              if (dragState.current) return;
-              if (zoom === ZOOM_MIN) zoomIn();
-              else resetView();
-            }}
-          />
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function MediaImage({ url, alt }: { url: string; alt: string }) {
-  const [src, setSrc] = useState<string | null>(null);
-  const [error, setError] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState(false);
-
-  const loadImage = useCallback(async () => {
-    if (!url) return;
-
-    // Proxy URLs need auth fetch to create blob URL
-    if (url.startsWith("/api/whatsapp/media/")) {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Failed to load media");
-        const blob = await res.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        setSrc(blobUrl);
-      } catch {
-        setError(true);
-      } finally {
-        setLoading(false);
-      }
-    } else {
-      setSrc(url);
-      setLoading(false);
-    }
-  }, [url]);
-
-  useEffect(() => {
-    loadImage();
-    return () => {
-      if (src?.startsWith("blob:")) {
-        URL.revokeObjectURL(src);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadImage]);
-
-  if (error) {
-    return (
-      <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-muted">
-        <ImageOff className="h-8 w-8 text-muted-foreground" />
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="flex h-40 w-60 items-center justify-center rounded-lg bg-muted">
-        <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setExpanded(true)}
-        className="block cursor-zoom-in"
-      >
-        <img
-          src={src ?? ""}
-          alt={alt}
-          className="max-h-64 max-w-60 rounded-lg object-cover"
-          onError={() => setError(true)}
-        />
-      </button>
-      {src && (
-        <ImageLightbox
-          src={src}
-          alt={alt}
-          open={expanded}
-          onOpenChange={setExpanded}
-        />
-      )}
-    </>
-  );
-}
-
-function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof useTranslations> }) {
   switch (message.content_type) {
     case "text":
       return (
@@ -345,7 +82,7 @@ function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof
       return (
         <div>
           {message.media_url ? (
-            <MediaImage url={message.media_url} alt="Shared image" />
+            <MediaImageBubble message={message} onOpen={openMedia} t={t} />
           ) : (
             <MediaUnavailable label={t("photo")} t={t} />
           )}
@@ -361,11 +98,7 @@ function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof
       return (
         <div>
           {message.media_url ? (
-            <video
-              src={message.media_url}
-              controls
-              className="max-h-64 max-w-60 rounded-lg"
-            />
+            <MediaVideoBubble message={message} onOpen={openMedia} t={t} />
           ) : (
             <MediaUnavailable label={t("video")} t={t} />
           )}
@@ -381,7 +114,7 @@ function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof
       return (
         <div>
           {message.media_url ? (
-            <audio src={message.media_url} controls className="max-w-60" />
+            <MediaAudioBubble message={message} t={t} />
           ) : (
             <MediaUnavailable label={t("audio")} t={t} />
           )}
@@ -392,19 +125,7 @@ function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof
       if (!message.media_url) {
         return <MediaUnavailable label={message.content_text || t("document")} t={t} />;
       }
-      return (
-        <a
-          href={message.media_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm hover:bg-muted"
-        >
-          <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
-          <span className="truncate">
-            {message.content_text || t("document")}
-          </span>
-        </a>
-      );
+      return <MediaDocumentBubble message={message} t={t} />;
 
     case "template":
       return (
@@ -477,6 +198,7 @@ export function MessageBubble({
   reactions,
   currentUserId,
   onToggleReaction,
+  onOpenMedia,
 }: MessageBubbleProps) {
   const t = useTranslations("Inbox.bubble");
 
@@ -507,7 +229,7 @@ export function MessageBubble({
             onPrimary={isAgent}
           />
         )}
-        <MessageContent message={message} t={t} />
+        <MessageContent message={message} t={t} onOpenMedia={onOpenMedia} />
         <div
           className={cn(
             "mt-1 flex items-center gap-1",

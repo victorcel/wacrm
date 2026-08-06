@@ -218,9 +218,23 @@
       "aiBadge": "AI",
       "aiBadgeTitle": "Sent automatically by the AI assistant",
       "download": "Download",
-      "zoomIn": "Zoom in",
-      "zoomOut": "Zoom out",
-      "zoomReset": "Reset zoom"
+      "downloadFailed": "Couldn't download the attachment",
+      "viewImage": "View image",
+      "expandVideo": "Expand video",
+      "imageAlt": "Shared image"
+    },
+    "mediaViewer": {
+      "counter": "{index} of {total}",
+      "previous": "Previous",
+      "next": "Next",
+      "zoomIn": "Zoom to full size",
+      "zoomOut": "Fit to screen",
+      "openOriginal": "Open original",
+      "download": "Download",
+      "downloadFailed": "Couldn't download the attachment",
+      "failed": "This attachment is no longer available",
+      "imageAlt": "Shared image",
+      "you": "You"
     },
     "actions": {
       "reply": "Reply",
@@ -375,6 +389,7 @@
       "contactInfo": "Contact Information",
       "unnamed": "Unknown",
       "contactDetailsDesc": "Contact details",
+      "name": "Name",
       "phone": "Phone",
       "email": "Email",
       "company": "Company",
@@ -975,6 +990,8 @@
         "placeholderBody": "{\"id\": \"{{ contact.id }}\"}",
         "matchType": "Match type",
         "matchContains": "Contains",
+        "matchWord": "Whole word",
+        "matchWordHint": "Matches the keyword only as a standalone word, so \"k\" no longer fires on \"thanks\". Best for short keywords in space-separated languages; use Contains for languages written without spaces.",
         "matchExact": "Exact",
         "closeConversationHint": "Sets the conversation status to \"closed\". No configuration needed."
       }
@@ -1593,7 +1610,7 @@
       "nameLabel": "Name",
       "namePlaceholder": "e.g. Zapier automation",
       "scopesLabel": "Scopes",
-      "scopesHint": "A key with no scopes can still call <code className=\"text-[11px]\">GET /api/v1/me</code> to verify it works.",
+      "scopesHint": "A key with no scopes can still call <code>GET /api/v1/me</code> to verify it works.",
       "cancel": "Cancel",
       "creating": "Creating…",
       "createKey": "Create key",

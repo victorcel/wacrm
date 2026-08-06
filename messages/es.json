@@ -218,9 +218,23 @@
       "aiBadge": "IA",
       "aiBadgeTitle": "Enviado automáticamente por el asistente de IA",
       "download": "Descargar",
-      "zoomIn": "Acercar",
-      "zoomOut": "Alejar",
-      "zoomReset": "Restablecer zoom"
+      "downloadFailed": "No se pudo descargar el archivo adjunto",
+      "viewImage": "Ver imagen",
+      "expandVideo": "Ampliar video",
+      "imageAlt": "Imagen compartida"
+    },
+    "mediaViewer": {
+      "counter": "{index} de {total}",
+      "previous": "Anterior",
+      "next": "Siguiente",
+      "zoomIn": "Ver a tamaño real",
+      "zoomOut": "Ajustar a la pantalla",
+      "openOriginal": "Abrir original",
+      "download": "Descargar",
+      "downloadFailed": "No se pudo descargar el archivo adjunto",
+      "failed": "Este archivo adjunto ya no está disponible",
+      "imageAlt": "Imagen compartida",
+      "you": "Tú"
     },
     "actions": {
       "reply": "Responder",
@@ -375,6 +389,7 @@
       "contactInfo": "Información de contacto",
       "unnamed": "Desconocido",
       "contactDetailsDesc": "Datos del contacto",
+      "name": "Nombre",
       "phone": "Teléfono",
       "email": "Correo",
       "company": "Empresa",
@@ -975,6 +990,8 @@
         "placeholderBody": "{\"id\": \"{{ contact.id }}\"}",
         "matchType": "Tipo de coincidencia",
         "matchContains": "Contiene",
+        "matchWord": "Palabra completa",
+        "matchWordHint": "Coincide con la palabra clave solo cuando aparece como palabra independiente, así \"k\" ya no se activa con \"gracias\". Ideal para palabras clave cortas en idiomas que separan con espacios; usa Contiene para idiomas que se escriben sin espacios.",
         "matchExact": "Exacta",
         "closeConversationHint": "Cambia el estado de la conversación a \"cerrada\". No requiere configuración."
       }
