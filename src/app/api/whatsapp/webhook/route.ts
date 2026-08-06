@@ -6,6 +6,7 @@ import { normalizePhone } from '@/lib/whatsapp/phone-utils'
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
 import { reopenClosedConversation } from '@/lib/conversations/reopen'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
+import { describeUnsupportedMessage } from '@/lib/whatsapp/unsupported-message'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
@@ -58,6 +59,21 @@ interface WhatsAppMessage {
     button_reply?: { id: string; title: string }
     list_reply?: { id: string; title: string; description?: string }
   }
+  /**
+   * Set when `type === 'unsupported'` — Meta's placeholder for a message
+   * the Cloud API refuses to deliver (round videos/PTV, polls, edits,
+   * view-once media). There is no media id in this payload, so the
+   * content is unrecoverable. See @/lib/whatsapp/unsupported-message.
+   */
+  unsupported?: { type?: string }
+  /** Inbound message errors; populated alongside `type: 'unsupported'`. */
+  errors?: Array<{
+    code?: number
+    title?: string
+    message?: string
+    error_data?: { details?: string }
+  }>
+
   /** Present when the customer swipe-replies to one of our messages. */
   context?: { id: string }
 }
@@ -642,13 +658,18 @@ async function processMessage(
   void mediaType
 
   // The messages.content_type CHECK constraint (widened in migration 010
-  // to add 'interactive' for button/list taps) allows:
-  //   text, image, document, audio, video, location, template, interactive
+  // to add 'interactive' for button/list taps, and in migration 042 to add
+  // 'unsupported' for Meta's undeliverable-message placeholder) allows:
+  //   text, image, document, audio, video, location, template,
+  //   interactive, unsupported
   // Map incoming WhatsApp types that aren't in that list to the closest
   // allowed value so the INSERT doesn't fail with a constraint error.
+  // NOTE: migration 042 MUST be applied before this code is deployed —
+  // otherwise every 'unsupported' insert fails the CHECK and the message
+  // is dropped instead of merely rendering badly.
   const ALLOWED_CONTENT_TYPES = new Set([
     'text', 'image', 'document', 'audio', 'video',
-    'location', 'template', 'interactive',
+    'location', 'template', 'interactive', 'unsupported',
   ])
   const contentType = ALLOWED_CONTENT_TYPES.has(message.type)
     ? message.type
@@ -978,7 +999,35 @@ async function parseMessageContent(
       return { ...empty, contentText: '[Interactive reply]' }
     }
 
+    case 'unsupported': {
+      // Meta could not hand the message over — round video (PTV), poll,
+      // edit, view-once media. The payload carries no media id, so there
+      // is nothing to download and nothing to render. Leave contentText
+      // NULL and let the bubble render a translated placeholder from the
+      // 'unsupported' content_type; storing an English literal here is
+      // what produced the old "[Unsupported message type: unsupported]".
+      const info = describeUnsupportedMessage(message)
+
+      // Meta's documented `unsupported.type` list has no video entry, so
+      // we do not yet know what a round video reports. Log the whole
+      // payload (minus nothing — it is small) so the real shape shows up
+      // in the runtime logs and we can special-case it with evidence.
+      console.error(
+        '[webhook] unsupported message from Meta:',
+        JSON.stringify({ info, raw: message })
+      )
+      return empty
+    }
+
     default:
+      // A type Meta added that we have not mapped yet — distinct from
+      // 'unsupported' above, which is Meta's own placeholder. Log it so
+      // new types surface instead of silently becoming a bracket string.
+      console.error(
+        '[webhook] unmapped message type:',
+        message.type,
+        JSON.stringify(message)
+      )
       return {
         ...empty,
         contentText: `[Unsupported message type: ${message.type}]`,

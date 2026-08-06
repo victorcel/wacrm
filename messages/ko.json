@@ -215,6 +215,8 @@
       "buttonReply": "버튼 응답",
       "interactiveReply": "[인터랙티브 응답]",
       "unsupported": "[지원되지 않는 메시지 형식]",
+      "unsupportedMessage": "메시지를 표시할 수 없습니다",
+      "unsupportedMessageHint": "WhatsApp은 이 형식을 비즈니스 앱에 전달하지 않습니다 — 원형 동영상, 설문, 편집된 메시지, 한 번만 보기 메시지.",
       "aiBadge": "AI",
       "aiBadgeTitle": "AI 어시스턴트가 자동으로 전송함",
       "download": "다운로드",

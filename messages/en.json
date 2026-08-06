@@ -215,6 +215,8 @@
       "buttonReply": "Button reply",
       "interactiveReply": "[Interactive reply]",
       "unsupported": "[Unsupported message type]",
+      "unsupportedMessage": "Message can't be shown",
+      "unsupportedMessageHint": "WhatsApp doesn't deliver this type to business apps — round videos, polls, edited or view-once messages.",
       "aiBadge": "AI",
       "aiBadgeTitle": "Sent automatically by the AI assistant",
       "download": "Download",

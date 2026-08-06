@@ -215,7 +215,13 @@ export type ContentType =
   | 'location'
   | 'template'
   /** Customer tapped a reply button or list row on a message we sent. */
-  | 'interactive';
+  | 'interactive'
+  /**
+   * Meta refused to hand the message over (round video/PTV, poll, edit,
+   * view-once). No media and no text — the bubble renders a localized
+   * placeholder. See @/lib/whatsapp/unsupported-message.
+   */
+  | 'unsupported';
 export type MessageStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 
 export interface Message {
