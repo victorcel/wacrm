@@ -11,6 +11,7 @@ import {
   LayoutTemplate,
   CornerDownLeft,
   Sparkles,
+  Ban,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
@@ -182,6 +183,22 @@ function MessageContent({
         </p>
       );
     }
+
+    case "unsupported":
+      // WhatsApp Cloud API refused to hand this message over — a round
+      // video (PTV), poll, edited message or view-once media. The webhook
+      // carries no media id, so there is genuinely nothing to fetch or
+      // render; say so instead of leaving an empty bubble. See
+      // @/lib/whatsapp/unsupported-message for the payload shape.
+      return (
+        <div className="flex items-start gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <Ban className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="flex flex-col gap-0.5">
+            <span className="font-medium">{t("unsupportedMessage")}</span>
+            <span>{t("unsupportedMessageHint")}</span>
+          </div>
+        </div>
+      );
 
     default:
       return (

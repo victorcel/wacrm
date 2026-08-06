@@ -215,6 +215,8 @@
       "buttonReply": "Respuesta con botón",
       "interactiveReply": "[Respuesta interactiva]",
       "unsupported": "[Tipo de mensaje no compatible]",
+      "unsupportedMessage": "No se puede mostrar el mensaje",
+      "unsupportedMessageHint": "WhatsApp no entrega este tipo a las apps de empresa: videos circulares, encuestas, mensajes editados o de una sola vez.",
       "aiBadge": "IA",
       "aiBadgeTitle": "Enviado automáticamente por el asistente de IA",
       "download": "Descargar",
