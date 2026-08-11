@@ -45,6 +45,25 @@ interface AccountSummary {
   default_currency: string;
 }
 
+/**
+ * Whether we managed to establish what this user may do.
+ *
+ * `unlinked` and `error` are the states worth surfacing: every RLS
+ * policy checks `is_account_member(account_id, …)` and every `useCan`
+ * gate returns false without a role, so in both the app silently
+ * becomes read-only — the whole UI renders, and nothing saves. That is
+ * indistinguishable from a bug unless we say so (issue #471).
+ */
+export type AccountStatus =
+  /** Profile row still in flight. */
+  | "loading"
+  /** Account + role resolved; normal operation. */
+  | "ready"
+  /** Signed in, but no profile row / no account / no role on it. */
+  | "unlinked"
+  /** The profile lookup itself failed after retrying. */
+  | "error";
+
 interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
@@ -91,6 +110,15 @@ interface AuthContextValue {
   // NOT NULL on `profiles`.
   // ----------------------------------------------------------
 
+  /**
+   * Outcome of resolving this user's account + role. Anything other
+   * than `ready` means writes will be rejected — render
+   * `<AccountAccessAlert />` (already mounted in the dashboard shell)
+   * rather than letting the user discover it one failed save at a time.
+   */
+  accountStatus: AccountStatus;
+  /** Underlying message when `accountStatus` is 'error' / 'unlinked'. */
+  accountStatusDetail: string | null;
   /** Account id the current user belongs to. Null while loading. */
   accountId: string | null;
   /** Role within that account. Null while loading. */
@@ -119,6 +147,26 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** Attempts at the profile lookup, including the first. */
+const PROFILE_FETCH_ATTEMPTS = 2;
+const PROFILE_FETCH_RETRY_MS = 1500;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Shape of the `profiles` select below. */
+interface ProfileRow {
+  id: string;
+  full_name: string | null;
+  email: string;
+  avatar_url: string | null;
+  role: string | null;
+  beta_features: string[] | null;
+  account_id: string | null;
+  account_role: string | null;
+}
+
 /**
  * AuthProvider — wrap this around the dashboard layout.
  * Makes ONE getSession() call for the whole tree instead of one per
@@ -131,6 +179,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [planFeatures, setPlanFeatures] = useState<Record<string, boolean>>({});
   const [isPlatformAdmin, setIsPlatformAdmin] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
+  // Why the account/role couldn't be established, when it couldn't.
+  // Null on the happy path.
+  const [statusDetail, setStatusDetail] = useState<string | null>(null);
   // Tracked separately from `loading`. The session settles fast (one
   // local cookie read); the profile fetch crosses the network and
   // settles later. Callers that gate on `profile.*` need to know which
@@ -148,24 +199,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchProfile = useCallback(async (userId: string) => {
     const supabase = createClient();
     setProfileLoading(true);
+    setStatusDetail(null);
     lastFetchedUserIdRef.current = userId;
     try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select(
-          "id, full_name, email, avatar_url, role, beta_features, account_id, account_role",
-        )
-        .eq("user_id", userId)
-        .maybeSingle();
+      let data: ProfileRow | null = null;
+      for (let attempt = 1; ; attempt++) {
+        const result = await supabase
+          .from("profiles")
+          .select(
+            "id, full_name, email, avatar_url, role, beta_features, account_id, account_role",
+          )
+          .eq("user_id", userId)
+          .maybeSingle();
 
-      if (error) {
+        if (!result.error) {
+          data = result.data;
+          break;
+        }
+
+        const error = result.error;
         console.error("[AuthProvider] fetchProfile error:", {
           message: error.message,
           details: error.details,
           hint: error.hint,
           code: error.code,
         });
+        // One hiccup here used to lock the session read-only for good:
+        // the profile stayed null, so every `useCan` gate answered
+        // false and no page offered a way to recover (issue #471).
+        // Retry, then hand the reason to the UI.
+        if (attempt < PROFILE_FETCH_ATTEMPTS) {
+          await sleep(PROFILE_FETCH_RETRY_MS);
+          continue;
+        }
         lastFetchedUserIdRef.current = null;
+        setStatusDetail(error.message);
         return;
       }
 
@@ -260,10 +328,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } else {
         lastFetchedUserIdRef.current = null;
+        setStatusDetail("no profiles row for the signed-in user");
       }
     } catch (err) {
       console.error("[AuthProvider] fetchProfile threw:", err);
       lastFetchedUserIdRef.current = null;
+      setStatusDetail(err instanceof Error ? err.message : "profile fetch failed");
     } finally {
       setProfileLoading(false);
     }
@@ -381,6 +451,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [profile?.account_role, profile?.account_id]);
 
+  // Signed out is not a broken account — the shell redirects to /login
+  // before anything reads this.
+  const accountStatus: AccountStatus = !user
+    ? "loading"
+    : profileLoading
+      ? "loading"
+      : !profile
+        ? "error"
+        : derived.accountId && derived.accountRole
+          ? "ready"
+          : "unlinked";
+
   return (
     <AuthContext.Provider
       value={{
@@ -394,6 +476,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         defaultCurrency: account?.default_currency ?? DEFAULT_CURRENCY,
         planFeatures,
         isPlatformAdmin,
+        accountStatus,
+        accountStatusDetail: statusDetail,
         ...derived,
       }}
     >
@@ -426,6 +510,10 @@ export function useAuth(): AuthContextValue {
       defaultCurrency: DEFAULT_CURRENCY,
       planFeatures: {},
       isPlatformAdmin: null,
+      // Outside the provider there is nothing to resolve yet — 'loading'
+      // keeps the access alert from firing on, say, the login page.
+      accountStatus: "loading",
+      accountStatusDetail: null,
       accountId: null,
       accountRole: null,
       isOwner: false,
