@@ -7,9 +7,15 @@
  * (e.g. `(accessToken, phoneNumberId)` vs `(phoneNumberId, accessToken)`).
  * With named params, a typo surfaces immediately as a TypeScript error
  * instead of a runtime rejection from Meta.
+ *
+ * Every send helper's `to` accepts EITHER a phone number OR a
+ * business-scoped user ID (BSUID) for username-only contacts;
+ * `buildRecipientFields` picks the matching Meta field. See recipient.ts.
  */
 
-const META_API_VERSION = 'v21.0'
+import { buildRecipientFields } from './recipient'
+
+const META_API_VERSION = 'v25.0'
 const META_API_BASE = `https://graph.facebook.com/${META_API_VERSION}`
 
 export interface MetaSendResult {
@@ -218,6 +224,7 @@ export async function getSubscribedApps(
 export interface SendTextMessageArgs {
   phoneNumberId: string
   accessToken: string
+  /** Recipient phone number, or a BSUID for username-only contacts. */
   to: string
   text: string
   /** Meta's message_id of the message being replied to. Adds a `context` field
@@ -237,7 +244,7 @@ export async function sendTextMessage(
   const body: Record<string, unknown> = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
-    to,
+    ...buildRecipientFields(to),
     type: 'text',
     text: { body: text },
   }
@@ -264,6 +271,7 @@ export type MediaKind = 'image' | 'video' | 'document' | 'audio'
 export interface SendMediaMessageArgs {
   phoneNumberId: string
   accessToken: string
+  /** Recipient phone number, or a BSUID for username-only contacts. */
   to: string
   kind: MediaKind
   /** Public URL Meta fetches at send time. */
@@ -304,7 +312,7 @@ export async function sendMediaMessage(
   const body: Record<string, unknown> = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
-    to,
+    ...buildRecipientFields(to),
     type: kind,
     [kind]: media,
   }
@@ -334,6 +342,7 @@ import {
 export interface SendTemplateMessageArgs {
   phoneNumberId: string
   accessToken: string
+  /** Recipient phone number, or a BSUID for username-only contacts. */
   to: string
   templateName: string
   language?: string
@@ -420,7 +429,7 @@ export async function sendTemplateMessage(
   const body: Record<string, unknown> = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
-    to,
+    ...buildRecipientFields(to),
     type: 'template',
     template: templatePayload,
   }
@@ -666,6 +675,7 @@ export async function deleteMessageTemplate(
 export interface SendReactionMessageArgs {
   phoneNumberId: string
   accessToken: string
+  /** Recipient phone number, or a BSUID for username-only contacts. */
   to: string
   /** Meta's message_id of the message being reacted to. */
   targetMessageId: string
@@ -691,7 +701,7 @@ export async function sendReactionMessage(
     body: JSON.stringify({
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
-      to,
+      ...buildRecipientFields(to),
       type: 'reaction',
       reaction: { message_id: targetMessageId, emoji },
     }),
@@ -742,6 +752,7 @@ export interface InteractiveButton {
 export interface SendInteractiveButtonsArgs {
   phoneNumberId: string
   accessToken: string
+  /** Recipient phone number, or a BSUID for username-only contacts. */
   to: string
   /** The body text — what the customer reads above the buttons. */
   bodyText: string
@@ -811,7 +822,7 @@ export async function sendInteractiveButtons(
   const body: Record<string, unknown> = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
-    to,
+    ...buildRecipientFields(to),
     type: 'interactive',
     interactive,
   }
@@ -851,6 +862,7 @@ export interface InteractiveListSection {
 export interface SendInteractiveListArgs {
   phoneNumberId: string
   accessToken: string
+  /** Recipient phone number, or a BSUID for username-only contacts. */
   to: string
   bodyText: string
   /** Label of the tap-to-expand button on the message bubble. */
@@ -943,7 +955,7 @@ export async function sendInteractiveList(
   const body: Record<string, unknown> = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
-    to,
+    ...buildRecipientFields(to),
     type: 'interactive',
     interactive,
   }

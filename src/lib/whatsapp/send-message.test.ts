@@ -149,6 +149,68 @@ describe('sendMessageToConversation — param validation (pre-DB)', () => {
   });
 });
 
+describe('sendMessageToConversation — recipient identity', () => {
+  /** A db that resolves one conversation carrying `contact`. */
+  function dbWithContact(contact: Record<string, unknown>): SupabaseClient {
+    return {
+      from(table: string) {
+        if (table !== 'conversations') {
+          throw new Error(`unexpected table: ${table}`);
+        }
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                single: () =>
+                  Promise.resolve({
+                    data: { id: 'cv-1', contact },
+                    error: null,
+                  }),
+              }),
+            }),
+          }),
+        };
+      },
+    } as unknown as SupabaseClient;
+  }
+
+  const textParams: SendMessageParams = {
+    conversationId: 'cv-1',
+    messageType: 'text',
+    contentText: 'hola',
+  };
+
+  it('rejects a contact with neither a phone nor a BSUID', async () => {
+    await expect(
+      sendMessageToConversation(dbWithContact({ id: 'c-1', phone: '' }), 'acct-1', textParams)
+    ).rejects.toThrow(/no phone number or WhatsApp user ID/);
+  });
+
+  it('accepts a username-only contact and proceeds past identity checks', async () => {
+    // The reported bug: this used to fail with "Contact phone number not
+    // found" because the send path required contacts.phone. It must now
+    // get as far as the WhatsApp config lookup, proven by the stub
+    // refusing that table.
+    await expect(
+      sendMessageToConversation(
+        dbWithContact({ id: 'c-1', phone: '', bsuid: 'US.13491208655302741918' }),
+        'acct-1',
+        textParams
+      )
+    ).rejects.toThrow(/unexpected table: whatsapp_config/);
+  });
+
+  it('still rejects a malformed phone when no BSUID can rescue it', async () => {
+    await expect(
+      sendMessageToConversation(
+        dbWithContact({ id: 'c-1', phone: '123' }),
+        'acct-1',
+        textParams
+      )
+    ).rejects.toThrow(/Invalid phone number format/);
+  });
+});
+
 describe('SendMessageError', () => {
   it('carries a machine code and an HTTP status', () => {
     const e = new SendMessageError('meta_error', 'boom', 502);

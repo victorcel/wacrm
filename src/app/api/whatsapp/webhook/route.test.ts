@@ -6,6 +6,8 @@ const h = vi.hoisted(() => ({
   dispatchInboundToFlows: vi.fn(),
   dispatchInboundToAiReply: vi.fn(),
   dispatchWebhookEvent: vi.fn(),
+  findExistingContact: vi.fn(),
+  findContactByBsuid: vi.fn(),
   state: {
     // Result the message upsert's .select() resolves to. A genuine insert
     // returns the row; a replayed delivery conflicts and returns [].
@@ -15,6 +17,8 @@ const h = vi.hoisted(() => ({
     replyContextParent: null as { id: string } | null,
     conversation: { id: 'conv-1', unread_count: 0, account_id: 'acc-1' },
     upsertCalls: [] as { row: Record<string, unknown>; options: unknown }[],
+    /** Identity patches written back onto an existing contact row. */
+    contactPatches: [] as Record<string, unknown>[],
     rpcCalls: [] as { name: string; args: Record<string, unknown> }[],
     afterCallbacks: [] as (() => Promise<void> | void)[],
     automationStarted: 0,
@@ -67,6 +71,16 @@ vi.mock('@supabase/supabase-js', () => ({
                 }),
               }),
             }),
+          }
+        case 'contacts':
+          // findOrCreateContact's identity patch: update(...).eq('id', …)
+          return {
+            update: (row: Record<string, unknown>) => {
+              h.state.contactPatches.push(row)
+              return {
+                eq: () => Promise.resolve({ data: null, error: null }),
+              }
+            },
           }
         case 'broadcast_recipients':
           // flagBroadcastReplyIfAny: select().eq().eq().in().order().limit()
@@ -146,11 +160,8 @@ vi.mock('@/lib/whatsapp/meta-api', () => ({
   downloadMedia: vi.fn(),
 }))
 vi.mock('@/lib/contacts/dedupe', () => ({
-  findExistingContact: vi.fn(async () => ({
-    id: 'contact-1',
-    name: 'Ada',
-    phone: '15551230000',
-  })),
+  findExistingContact: h.findExistingContact,
+  findContactByBsuid: h.findContactByBsuid,
   isUniqueViolation: () => false,
 }))
 vi.mock('@/lib/whatsapp/webhook-signature', () => ({
@@ -183,7 +194,30 @@ const TEXT_MESSAGE = {
   text: { body: 'hello' },
 }
 
-function inboundRequest(message: Record<string, unknown> = TEXT_MESSAGE) {
+/**
+ * A username-only customer as Meta actually delivers them since the
+ * 2026 rollout: NO `wa_id`, NO `from` — the BSUID is the only identity.
+ */
+const USERNAME_ONLY_MESSAGE = {
+  id: 'wamid.TEST-BSUID',
+  from_user_id: 'US.13491208655302741918',
+  timestamp: '1700000000',
+  type: 'text',
+  text: { body: 'hola' },
+}
+
+const USERNAME_ONLY_CONTACT = {
+  user_id: 'US.13491208655302741918',
+  profile: { name: 'Ada', username: 'ada' },
+}
+
+function inboundRequest(
+  message: Record<string, unknown> = TEXT_MESSAGE,
+  contact: Record<string, unknown> = {
+    wa_id: '15551230000',
+    profile: { name: 'Ada' },
+  },
+) {
   const body = {
     entry: [
       {
@@ -192,7 +226,7 @@ function inboundRequest(message: Record<string, unknown> = TEXT_MESSAGE) {
             field: 'messages',
             value: {
               metadata: { phone_number_id: 'pn-1' },
-              contacts: [{ wa_id: '15551230000', profile: { name: 'Ada' } }],
+              contacts: [contact],
               messages: [message],
             },
           },
@@ -206,8 +240,11 @@ function inboundRequest(message: Record<string, unknown> = TEXT_MESSAGE) {
   } as unknown as Request
 }
 
-async function runWebhook(message?: Record<string, unknown>) {
-  const res = await POST(inboundRequest(message))
+async function runWebhook(
+  message?: Record<string, unknown>,
+  contact?: Record<string, unknown>,
+) {
+  const res = await POST(inboundRequest(message, contact))
   // Drain the after() callback exactly as the runtime would.
   for (const cb of h.state.afterCallbacks) await cb()
   return res
@@ -220,6 +257,7 @@ beforeEach(() => {
   h.state.replyContextParent = null
   h.state.conversation = { id: 'conv-1', unread_count: 0, account_id: 'acc-1' }
   h.state.upsertCalls = []
+  h.state.contactPatches = []
   h.state.rpcCalls = []
   h.state.afterCallbacks = []
   h.state.automationStarted = 0
@@ -227,6 +265,12 @@ beforeEach(() => {
   h.dispatchInboundToFlows.mockResolvedValue({ consumed: false })
   h.dispatchInboundToAiReply.mockResolvedValue(undefined)
   h.dispatchWebhookEvent.mockResolvedValue(undefined)
+  h.findExistingContact.mockResolvedValue({
+    id: 'contact-1',
+    name: 'Ada',
+    phone: '15551230000',
+  })
+  h.findContactByBsuid.mockResolvedValue(null)
   h.runAutomationsForTrigger.mockImplementation(() => {
     h.state.automationStarted++
     return new Promise<void>((resolve) => {
@@ -235,6 +279,68 @@ beforeEach(() => {
         resolve()
       }, 0)
     })
+  })
+})
+
+describe('inbound webhook: WhatsApp usernames / BSUID', () => {
+  it('resolves a username-only customer by BSUID instead of minting a new contact', async () => {
+    // The bug: with no `from`/`wa_id`, the phone lookup was called with
+    // '' — it bails on an empty phone, so every inbound message created
+    // a fresh contact AND a fresh conversation.
+    h.findContactByBsuid.mockResolvedValue({
+      id: 'contact-bsuid-1',
+      name: 'Ada',
+      phone: '',
+      bsuid: 'US.13491208655302741918',
+    })
+
+    await runWebhook(USERNAME_ONLY_MESSAGE, USERNAME_ONLY_CONTACT)
+
+    // Looked the contact up by its BSUID...
+    expect(h.findContactByBsuid).toHaveBeenCalledWith(
+      expect.anything(),
+      'acc-1',
+      'US.13491208655302741918',
+    )
+    // ...and never ran the phone lookup with a meaningless empty string.
+    expect(h.findExistingContact).not.toHaveBeenCalled()
+    // The message still lands, on the existing thread.
+    expect(h.state.upsertCalls).toHaveLength(1)
+  })
+
+  it('still prefers the phone lookup when Meta sends both identities', async () => {
+    await runWebhook(
+      { ...USERNAME_ONLY_MESSAGE, from: '15551230000' },
+      { ...USERNAME_ONLY_CONTACT, wa_id: '15551230000' },
+    )
+
+    expect(h.findExistingContact).toHaveBeenCalledWith(
+      expect.anything(),
+      'acc-1',
+      '15551230000',
+    )
+    // Phone matched, so the BSUID lookup is never needed.
+    expect(h.findContactByBsuid).not.toHaveBeenCalled()
+    expect(h.state.upsertCalls).toHaveLength(1)
+
+    // The BSUID is back-filled onto the phone-only contact. This is what
+    // keeps replies working if the customer later hides their number.
+    expect(h.state.contactPatches).toHaveLength(1)
+    expect(h.state.contactPatches[0]).toMatchObject({
+      bsuid: 'US.13491208655302741918',
+      username: 'ada',
+    })
+  })
+
+  it('drops a message carrying neither identity rather than orphaning a contact', async () => {
+    await runWebhook(
+      { id: 'wamid.NOBODY', timestamp: '1700000000', type: 'text', text: { body: 'x' } },
+      { profile: { name: 'Nobody' } },
+    )
+
+    expect(h.findExistingContact).not.toHaveBeenCalled()
+    expect(h.findContactByBsuid).not.toHaveBeenCalled()
+    expect(h.state.upsertCalls).toHaveLength(0)
   })
 })
 

@@ -3,6 +3,7 @@ import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { sendReactionMessage } from '@/lib/whatsapp/meta-api';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { sanitizePhoneForMeta } from '@/lib/whatsapp/phone-utils';
+import { isBsuid, resolveSendTarget } from '@/lib/whatsapp/recipient';
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -66,7 +67,7 @@ export async function POST(request: Request) {
 
     const { data: conversation, error: convError } = await supabase
       .from('conversations')
-      .select('id, account_id, contact:contacts(phone)')
+      .select('id, account_id, contact:contacts(phone, bsuid)')
       .eq('id', targetMessage.conversation_id)
       .eq('account_id', accountId)
       .maybeSingle();
@@ -81,9 +82,12 @@ export async function POST(request: Request) {
     const contact = Array.isArray(conversation.contact)
       ? conversation.contact[0]
       : conversation.contact;
-    if (!contact?.phone) {
+    // Phone number, or BSUID for a contact reached via a WhatsApp
+    // username (Meta never gives us a number for those).
+    const sendTarget = resolveSendTarget(contact ?? {});
+    if (!sendTarget) {
       return NextResponse.json(
-        { error: 'Contact phone number not found' },
+        { error: 'Contact has no phone number or WhatsApp user ID' },
         { status: 400 },
       );
     }
@@ -103,13 +107,16 @@ export async function POST(request: Request) {
     }
 
     const accessToken = decrypt(config.access_token);
-    const sanitizedPhone = sanitizePhoneForMeta(contact.phone);
+    // A BSUID must reach Meta verbatim; only a phone gets sanitized.
+    const recipient = isBsuid(sendTarget)
+      ? sendTarget
+      : sanitizePhoneForMeta(sendTarget);
 
     try {
       await sendReactionMessage({
         phoneNumberId: config.phone_number_id,
         accessToken,
-        to: sanitizedPhone,
+        to: recipient,
         targetMessageId: targetMessage.message_id,
         emoji,
       });

@@ -3,7 +3,11 @@ import { createClient } from '@supabase/supabase-js'
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption'
 import { getMediaUrl, downloadMedia } from '@/lib/whatsapp/meta-api'
 import { normalizePhone } from '@/lib/whatsapp/phone-utils'
-import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe'
+import {
+  findExistingContact,
+  findContactByBsuid,
+  isUniqueViolation,
+} from '@/lib/contacts/dedupe'
 import { reopenClosedConversation } from '@/lib/conversations/reopen'
 import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { describeUnsupportedMessage } from '@/lib/whatsapp/unsupported-message'
@@ -37,7 +41,18 @@ function supabaseAdmin() {
 
 interface WhatsAppMessage {
   id: string
-  from: string
+  /**
+   * The sender's phone number. OPTIONAL since Meta's 2026 username
+   * rollout: a customer who adopts a username and has no 30-day message
+   * history with us (and isn't in our contact book) arrives with this
+   * field ABSENT — `from_user_id` is the only identity we get. Treating
+   * it as always-present is what produced the "Contact phone number not
+   * found" send failure and the duplicate-contact fan-out (see
+   * migration 044).
+   */
+  from?: string
+  /** The sender's BSUID. Always present, with or without a username. */
+  from_user_id?: string
   timestamp: string
   type: string
   text?: { body: string }
@@ -97,15 +112,22 @@ interface WhatsAppWebhookEntry {
         phone_number_id: string
       }
       contacts?: Array<{
-        profile: { name: string }
-        wa_id: string
+        /** `username` is present once the customer adopts a WhatsApp handle. */
+        profile: { name: string; username?: string }
+        /** Omitted for username-only customers — see WhatsAppMessage.from. */
+        wa_id?: string
+        /** BSUID. Always present. The durable identity for this customer. */
+        user_id?: string
       }>
       messages?: WhatsAppMessage[]
       statuses?: Array<{
         id: string
         status: string
         timestamp: string
-        recipient_id: string
+        /** Omitted when the message was sent to a BSUID. */
+        recipient_id?: string
+        /** BSUID of the recipient. Absent on `failed` phone-number sends. */
+        recipient_user_id?: string
       }>
     }
     field: string
@@ -379,7 +401,12 @@ async function handleStatusUpdate(status: {
   id: string
   status: string
   timestamp: string
-  recipient_id: string
+  // Both recipient identifiers are optional and neither is read here:
+  // every mirror below keys off `status.id` (the wamid), which Meta
+  // always sends. Declared so the shape matches what Meta now delivers
+  // for BSUID sends rather than implying a phone is guaranteed.
+  recipient_id?: string
+  recipient_user_id?: string
 }) {
   // 1) Mirror onto messages (legacy behavior) — Meta's status values
   //    already match the CHECK constraint on messages.status. No
@@ -585,7 +612,11 @@ async function handleReaction(
 
 async function processMessage(
   message: WhatsAppMessage,
-  contact: { profile: { name: string }; wa_id: string },
+  contact: {
+    profile: { name: string; username?: string }
+    wa_id?: string
+    user_id?: string
+  },
   // Tenancy. Resolved from the matched whatsapp_config row; every
   // contact / conversation / message row created downstream is
   // stamped with this so any member of the account can see it.
@@ -596,15 +627,35 @@ async function processMessage(
   configOwnerUserId: string,
   accessToken: string
 ) {
-  const senderPhone = normalizePhone(message.from)
+  // Identity. Either half can be absent: a username-only customer with
+  // no recent history arrives with no phone at all, while contacts that
+  // predate the BSUID rollout are phone-only. `message.*` is preferred
+  // over `contact.*` because the two arrays are correlated by index and
+  // the message is the authoritative sender-of-record.
+  const senderPhone = normalizePhone(message.from ?? contact.wa_id ?? '')
+  const senderBsuid = message.from_user_id ?? contact.user_id ?? null
   const contactName = contact.profile.name
+  const senderUsername = contact.profile.username ?? null
+
+  // Neither identifier means we cannot attribute this message to anyone
+  // — creating a contact would produce exactly the orphan rows that
+  // migration 044's CHECK now forbids. Drop it loudly instead.
+  if (!senderPhone && !senderBsuid) {
+    console.error(
+      '[webhook] inbound message has neither phone nor BSUID; dropping:',
+      message.id
+    )
+    return
+  }
 
   // Find or create contact
   const contactOutcome = await findOrCreateContact(
     accountId,
     configOwnerUserId,
     senderPhone,
-    contactName
+    contactName,
+    senderBsuid,
+    senderUsername
   )
   if (!contactOutcome) return
   const contactRecord = contactOutcome.contact
@@ -701,7 +752,7 @@ async function processMessage(
 
   // Idempotent insert. Meta retries webhook deliveries (a slow ack, a
   // transient 5xx), and each retry replays the exact same message.id. The
-  // unique index on (conversation_id, message_id) added in migration 037
+  // unique index on (conversation_id, message_id) added in migration 043
   // makes a replay conflict; `ignoreDuplicates` turns that into an ON
   // CONFLICT DO NOTHING, and the `.select()` then returns the inserted row
   // ONLY on a genuine first insert — an empty result means this delivery
@@ -746,7 +797,7 @@ async function processMessage(
     return
   }
 
-  // Update conversation. The unread bump is done DB-side (migration 037's
+  // Update conversation. The unread bump is done DB-side (migration 043's
   // bump_conversation_on_inbound) rather than as a read-modify-write of the
   // snapshot loaded above: two inbound messages for the same conversation
   // can process concurrently, and computing `snapshot + 1` in the app let
@@ -1112,53 +1163,99 @@ async function findOrCreateContact(
   accountId: string,
   configOwnerUserId: string,
   phone: string,
-  name: string
+  name: string,
+  /** BSUID, when Meta sent one. Null for pre-rollout phone-only traffic. */
+  bsuid: string | null = null,
+  /** Public @handle. Display only — never used to look a contact up. */
+  username: string | null = null
 ): Promise<ContactOutcome | null> {
-  // Find an existing contact for this account by phone. The shared
-  // helper pre-filters in SQL by the last-8-digit suffix (so we don't
-  // pull every contact on every inbound message) then applies the
-  // strict `phonesMatch` in JS on the small candidate set. The same
-  // helper backs the manual contact form and CSV import, so all three
-  // paths agree on what "same number" means (issue #212).
-  const existingContact = await findExistingContact(
-    supabaseAdmin(),
-    accountId,
-    phone,
-  )
+  // Resolve the contact by whichever identity we have.
+  //
+  // Phone first: it's the identifier the overwhelming majority of
+  // contacts already carry, and matching on it lets a customer who
+  // later adopts a username keep their existing history instead of
+  // forking a second record. The shared helper pre-filters in SQL by
+  // the last-8-digit suffix (so we don't pull every contact on every
+  // inbound message) then applies the strict `phonesMatch` in JS on the
+  // small candidate set. The same helper backs the manual contact form
+  // and CSV import, so all three paths agree on what "same number"
+  // means (issue #212).
+  //
+  // BSUID second: the only identity a username-only customer has. Exact
+  // match, backed by the unique index from migration 044.
+  const existingContact =
+    (phone
+      ? await findExistingContact(supabaseAdmin(), accountId, phone)
+      : null) ??
+    (bsuid ? await findContactByBsuid(supabaseAdmin(), accountId, bsuid) : null)
 
   if (existingContact) {
-    // Update name if it changed
-    if (name && name !== existingContact.name) {
-      await supabaseAdmin()
-        .from('contacts')
-        .update({ name, updated_at: new Date().toISOString() })
-        .eq('id', existingContact.id)
+    // Refresh the mutable/late-arriving fields. The BSUID back-fill is
+    // what stitches the two identities together: a contact we've only
+    // ever known by phone learns its BSUID the first time Meta sends
+    // one, so replies keep working if the customer later hides their
+    // number. Only ever written when absent — a BSUID is immutable per
+    // portfolio, so a differing value means a different person.
+    const patch: Record<string, unknown> = {}
+    if (name && name !== existingContact.name) patch.name = name
+    if (bsuid && !existingContact.bsuid) patch.bsuid = bsuid
+    if (username && username !== existingContact.username) {
+      patch.username = username
     }
-    return { contact: existingContact, wasCreated: false }
+    // Back-fill a phone onto a contact we first met as username-only,
+    // once Meta starts including it (30-day history / contact book).
+    if (phone && !existingContact.phone) patch.phone = phone
+
+    if (Object.keys(patch).length > 0) {
+      patch.updated_at = new Date().toISOString()
+      const { error: patchError } = await supabaseAdmin()
+        .from('contacts')
+        .update(patch)
+        .eq('id', existingContact.id)
+      if (patchError) {
+        console.error('[webhook] contact identity patch failed:', patchError.message)
+      }
+    }
+    return { contact: { ...existingContact, ...patch }, wasCreated: false }
   }
 
   // Create new contact. account_id is the tenancy column;
   // user_id is the NOT NULL FK audit column (no inbound message
   // has a single "user who created" it — we attribute to the
   // WhatsApp config owner as a stable default).
+  //
+  // `phone` stays NOT NULL in the schema, so a username-only contact
+  // gets '' rather than NULL — migration 022's unique index is partial
+  // on `phone_normalized <> ''` and so ignores those rows, which is
+  // exactly why the BSUID index exists to cover them instead.
   const { data: newContact, error: createError } = await supabaseAdmin()
     .from('contacts')
     .insert({
       account_id: accountId,
       user_id: configOwnerUserId,
       phone,
-      name: name || phone,
+      bsuid,
+      username,
+      // Fall back to the @handle before the raw identifier: showing
+      // "US.13491208655302741918" in the inbox helps nobody.
+      name: name || (username ? `@${username}` : phone || bsuid),
     })
     .select()
     .single()
 
   if (createError) {
     // Lost a race: a concurrent inbound delivery (or another path)
-    // created this contact between our lookup and insert, and the
-    // unique index (migration 022) rejected the duplicate. Re-resolve
-    // the existing row instead of dropping the message.
+    // created this contact between our lookup and insert, and a unique
+    // index (022 on phone, 043 on bsuid) rejected the duplicate.
+    // Re-resolve the existing row instead of dropping the message.
     if (isUniqueViolation(createError)) {
-      const raced = await findExistingContact(supabaseAdmin(), accountId, phone)
+      const raced =
+        (phone
+          ? await findExistingContact(supabaseAdmin(), accountId, phone)
+          : null) ??
+        (bsuid
+          ? await findContactByBsuid(supabaseAdmin(), accountId, bsuid)
+          : null)
       if (raced) return { contact: raced, wasCreated: false }
     }
     console.error('Error creating contact:', createError)

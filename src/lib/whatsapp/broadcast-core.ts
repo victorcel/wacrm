@@ -194,7 +194,7 @@ export async function createBroadcast(
   // are reported to the caller in the POST response, not in these
   // persisted counts.
   // Insert the parent broadcast and its recipient rows in ONE transaction
-  // (migration 037's create_broadcast_with_recipients). Previously these
+  // (migration 043's create_broadcast_with_recipients). Previously these
   // were two separate inserts: if the recipient insert failed, the parent
   // was already persisted with status 'sending' and no recipients, leaving
   // an orphaned campaign that looked like it was sending but had no

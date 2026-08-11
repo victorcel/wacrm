@@ -9,12 +9,8 @@ import {
 } from '@/lib/whatsapp/meta-api'
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import { decrypt } from '@/lib/whatsapp/encryption'
-import {
-  sanitizePhoneForMeta,
-  isValidE164,
-  phoneVariants,
-  isRecipientNotAllowedError,
-} from '@/lib/whatsapp/phone-utils'
+import { isRecipientNotAllowedError } from '@/lib/whatsapp/phone-utils'
+import { prepareRecipient } from '@/lib/whatsapp/recipient'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
@@ -69,18 +65,25 @@ export async function engineSendText(
 
   const { data: contact, error: contactErr } = await db
     .from('contacts')
-    .select('id, phone')
+    .select('id, phone, bsuid')
     .eq('id', args.contactId)
     .eq('account_id', args.accountId)
     .maybeSingle()
-  if (contactErr || !contact?.phone) {
+  if (contactErr || !contact) {
     throw new Error('contact not found for this account')
   }
 
-  const sanitized = sanitizePhoneForMeta(contact.phone)
-  if (!isValidE164(sanitized)) {
-    throw new Error(`contact phone invalid: ${contact.phone}`)
+  // Phone, or BSUID for a contact reached via a WhatsApp username.
+  // A BSUID is sent verbatim and gets no trunk-prefix variant retries.
+  const recipient = prepareRecipient(contact)
+  if (!recipient.ok) {
+    throw new Error(
+      recipient.reason === 'no_identifier'
+        ? 'contact has no phone number or WhatsApp user ID'
+        : `contact phone invalid: ${contact.phone}`,
+    )
   }
+  const sanitized = recipient.target
 
   const { data: config, error: configErr } = await db
     .from('whatsapp_config')
@@ -103,7 +106,7 @@ export async function engineSendText(
     return r.messageId
   }
 
-  const variants = phoneVariants(sanitized)
+  const variants = recipient.variants
   let workingPhone = sanitized
   let waMessageId = ''
   let lastError: unknown = null
@@ -179,18 +182,25 @@ export async function engineSendMedia(
 
   const { data: contact, error: contactErr } = await db
     .from('contacts')
-    .select('id, phone')
+    .select('id, phone, bsuid')
     .eq('id', args.contactId)
     .eq('account_id', args.accountId)
     .maybeSingle()
-  if (contactErr || !contact?.phone) {
+  if (contactErr || !contact) {
     throw new Error('contact not found for this account')
   }
 
-  const sanitized = sanitizePhoneForMeta(contact.phone)
-  if (!isValidE164(sanitized)) {
-    throw new Error(`contact phone invalid: ${contact.phone}`)
+  // Phone, or BSUID for a contact reached via a WhatsApp username.
+  // A BSUID is sent verbatim and gets no trunk-prefix variant retries.
+  const recipient = prepareRecipient(contact)
+  if (!recipient.ok) {
+    throw new Error(
+      recipient.reason === 'no_identifier'
+        ? 'contact has no phone number or WhatsApp user ID'
+        : `contact phone invalid: ${contact.phone}`,
+    )
   }
+  const sanitized = recipient.target
 
   const { data: config, error: configErr } = await db
     .from('whatsapp_config')
@@ -216,7 +226,7 @@ export async function engineSendMedia(
     return r.messageId
   }
 
-  const variants = phoneVariants(sanitized)
+  const variants = recipient.variants
   let workingPhone = sanitized
   let waMessageId = ''
   let lastError: unknown = null
@@ -331,18 +341,25 @@ async function sendInteractiveViaMeta(
   // Migration 017 moved both tables to account-scoped tenancy.
   const { data: contact, error: contactErr } = await db
     .from('contacts')
-    .select('id, phone')
+    .select('id, phone, bsuid')
     .eq('id', input.contactId)
     .eq('account_id', input.accountId)
     .maybeSingle()
-  if (contactErr || !contact?.phone) {
+  if (contactErr || !contact) {
     throw new Error('contact not found for this account')
   }
 
-  const sanitized = sanitizePhoneForMeta(contact.phone)
-  if (!isValidE164(sanitized)) {
-    throw new Error(`contact phone invalid: ${contact.phone}`)
+  // Phone, or BSUID for a contact reached via a WhatsApp username.
+  // A BSUID is sent verbatim and gets no trunk-prefix variant retries.
+  const recipient = prepareRecipient(contact)
+  if (!recipient.ok) {
+    throw new Error(
+      recipient.reason === 'no_identifier'
+        ? 'contact has no phone number or WhatsApp user ID'
+        : `contact phone invalid: ${contact.phone}`,
+    )
   }
+  const sanitized = recipient.target
 
   const { data: config, error: configErr } = await db
     .from('whatsapp_config')
@@ -384,7 +401,7 @@ async function sendInteractiveViaMeta(
   // Same phone-variant retry as automations/meta-send.ts. Numbers
   // registered with/without a trunk 0 + Meta's sandbox quirks all
   // need this to reliably land a message.
-  const variants = phoneVariants(sanitized)
+  const variants = recipient.variants
   let workingPhone = sanitized
   let waMessageId = ''
   let lastError: unknown = null

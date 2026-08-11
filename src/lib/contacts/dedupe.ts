@@ -23,7 +23,40 @@ export interface ExistingContact {
   id: string;
   phone: string;
   name?: string | null;
+  /** Meta business-scoped user ID — set for username-only contacts. */
+  bsuid?: string | null;
   [key: string]: unknown;
+}
+
+/**
+ * Find an existing contact by its Meta business-scoped user ID.
+ *
+ * This is the identity path for customers who reach us through a
+ * WhatsApp username: Meta omits `wa_id` / `from` for them, so the phone
+ * lookup above has nothing to match on and every inbound message would
+ * otherwise mint a fresh contact (and a fresh conversation with it).
+ *
+ * The BSUID is matched EXACTLY — it is an opaque per-portfolio token,
+ * not a number, so none of `phone_normalized`'s digit-stripping or
+ * `phonesMatch`'s trunk-prefix tolerance applies. Backed by the unique
+ * index on (account_id, bsuid) from migration 044.
+ */
+export async function findContactByBsuid(
+  db: SupabaseClient,
+  accountId: string,
+  bsuid: string,
+): Promise<ExistingContact | null> {
+  if (!bsuid) return null;
+
+  const { data, error } = await db
+    .from("contacts")
+    .select("*")
+    .eq("account_id", accountId)
+    .eq("bsuid", bsuid)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return data as ExistingContact;
 }
 
 /**

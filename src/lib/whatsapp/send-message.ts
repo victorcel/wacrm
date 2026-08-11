@@ -36,12 +36,8 @@ import {
 } from '@/lib/whatsapp/interactive';
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
-import {
-  sanitizePhoneForMeta,
-  isValidE164,
-  phoneVariants,
-  isRecipientNotAllowedError,
-} from '@/lib/whatsapp/phone-utils';
+import { isRecipientNotAllowedError } from '@/lib/whatsapp/phone-utils';
+import { prepareRecipient } from '@/lib/whatsapp/recipient';
 import type { MessageTemplate } from '@/types';
 import { isMessageTemplate } from '@/lib/whatsapp/template-row-guard';
 
@@ -230,22 +226,22 @@ export async function sendMessageToConversation(
   }
 
   const contact = conversation.contact;
-  if (!contact?.phone) {
+
+  // Who we send to. A contact reached through a WhatsApp username has
+  // no phone number at all — Meta never gave us one — and is addressed
+  // by its BSUID instead, verbatim and without variant retries.
+  const recipient = prepareRecipient(contact ?? {});
+  if (!recipient.ok) {
     throw new SendMessageError(
       'bad_request',
-      'Contact phone number not found',
+      recipient.reason === 'no_identifier'
+        ? 'Contact has no phone number or WhatsApp user ID'
+        : 'Invalid phone number format',
       400
     );
   }
 
-  const sanitizedPhone = sanitizePhoneForMeta(contact.phone);
-  if (!isValidE164(sanitizedPhone)) {
-    throw new SendMessageError(
-      'bad_request',
-      'Invalid phone number format',
-      400
-    );
-  }
+  const sanitizedPhone = recipient.target;
 
   // WhatsApp config, account-scoped.
   const { data: config, error: configError } = await db
@@ -401,7 +397,7 @@ export async function sendMessageToConversation(
   let waMessageId = '';
   let workingPhone = sanitizedPhone;
   try {
-    const variants = phoneVariants(sanitizedPhone);
+    const variants = recipient.variants;
     let lastError: unknown = null;
 
     for (const variant of variants) {
