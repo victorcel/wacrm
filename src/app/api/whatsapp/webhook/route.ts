@@ -63,6 +63,14 @@ interface WhatsAppMessage {
   audio?: { id: string; mime_type: string }
   sticker?: { id: string; mime_type: string }
   location?: { latitude: number; longitude: number; name?: string; address?: string }
+  /**
+   * Set when the customer shares one or more vCard contact cards. Meta
+   * always sends an array, even for a single card.
+   */
+  contacts?: Array<{
+    name?: { formatted_name?: string }
+    phones?: Array<{ phone?: string }>
+  }>
   reaction?: { message_id: string; emoji: string }
   /**
    * Set when the customer taps a button or list row on an interactive
@@ -1121,6 +1129,25 @@ async function parseMessageContent(
         return { ...empty, contentText: locationText }
       }
       return empty
+
+    case 'contacts': {
+      // vCard share. Summarize as "Name - phone" (first phone number, if
+      // any) per card so the inbox bubble is readable instead of blank;
+      // multiple cards in one message are joined with '; '.
+      const contacts = message.contacts
+      if (contacts && contacts.length > 0) {
+        const contactsText = contacts
+          .map((c) =>
+            [c.name?.formatted_name || null, c.phones?.[0]?.phone || null]
+              .filter(Boolean)
+              .join(' - ')
+          )
+          .filter(Boolean)
+          .join('; ')
+        return { ...empty, contentText: contactsText || null }
+      }
+      return empty
+    }
 
     case 'reaction':
       return { ...empty, contentText: message.reaction?.emoji || null }

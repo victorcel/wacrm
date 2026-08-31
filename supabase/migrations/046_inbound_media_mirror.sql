@@ -1,5 +1,15 @@
 -- ============================================================
--- 039_inbound_media_mirror
+-- 046_inbound_media_mirror
+--
+-- Originally filed as 039, which collided with 039_interactive_messages.sql
+-- (both branches picked the same next number). That collision meant this
+-- migration was never applied: Supabase's migration history table keys
+-- on the numeric prefix, so once 039 was recorded for the other file,
+-- this one silently never ran — messages.media_type and
+-- whatsapp_config.mirror_inbound_media never existed in production,
+-- which is why every inbound message insert started failing with
+-- PGRST204 ("Could not find the 'media_type' column"). Renumbered to
+-- the next free slot so it actually applies.
 --
 -- Issue #466. Inbound media is never persisted. The webhook verifies
 -- the Meta media id and stores a POINTER — `/api/whatsapp/media/<id>`

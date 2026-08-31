@@ -1,5 +1,13 @@
 -- ============================================================
--- 038_broadcast_resume
+-- 045_broadcast_resume
+--
+-- Originally filed as 038, which collided with 038_ai_extra_providers.sql
+-- (both branches picked the same next number). That collision meant this
+-- migration was never applied: Supabase's migration history table keys
+-- on the numeric prefix, so once 038 was recorded for the other file,
+-- this one silently never ran — broadcast_recipients.template_params and
+-- broadcasts.delivery_locked_at never existed in production. Renumbered
+-- to the next free slot so it actually applies.
 --
 -- Issue #472. A dashboard campaign's send loop runs in the browser tab
 -- that started it. Close the tab and the remaining recipients are
@@ -47,7 +55,7 @@ ALTER TABLE broadcasts
   ADD COLUMN IF NOT EXISTS delivery_locked_at TIMESTAMPTZ;
 
 COMMENT ON COLUMN broadcasts.delivery_locked_at IS
-  'Set while a server-side delivery pass is fanning out; NULL when idle. See 038_broadcast_resume.sql.';
+  'Set while a server-side delivery pass is fanning out; NULL when idle. See 045_broadcast_resume.sql.';
 
 -- Resume selects this broadcast's pending / failed rows.
 CREATE INDEX IF NOT EXISTS idx_broadcast_recipients_broadcast_status

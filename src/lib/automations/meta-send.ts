@@ -15,7 +15,6 @@ import {
   resolveTemplateRow,
   templateContentText,
 } from '@/lib/whatsapp/template-body'
-import { renderTemplateText } from '@/lib/whatsapp/template-render'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
@@ -221,22 +220,6 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
       ? input.text
       : templateContentText(templateRow, input.params ?? [])
   const template_name = input.kind === 'template' ? input.templateName : null
-
-  if (input.kind === 'template') {
-    // Render the template body (+ text header/footer) so the inbox
-    // bubble shows the same text the recipient sees, instead of the
-    // bare "Template" badge with no text underneath.
-    const { data: templateRow } = await db
-      .from('message_templates')
-      .select('header_type, header_content, body_text, footer_text')
-      .eq('account_id', input.accountId)
-      .eq('name', input.templateName)
-      .eq('language', input.language || 'en_US')
-      .maybeSingle()
-    if (templateRow) {
-      content_text = renderTemplateText(templateRow, { body: input.params })
-    }
-  }
 
   const { error: msgErr } = await db.from('messages').insert({
     conversation_id: input.conversationId,
