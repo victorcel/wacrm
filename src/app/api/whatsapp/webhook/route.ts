@@ -1277,7 +1277,11 @@ async function findOrCreateContact(
     // number. Only ever written when absent — a BSUID is immutable per
     // portfolio, so a differing value means a different person.
     const patch: Record<string, unknown> = {}
-    if (name && name !== existingContact.name) patch.name = name
+    // Only ever written when absent — once a contact has a name (even
+    // WhatsApp's own auto-assigned one), it's never auto-overwritten again,
+    // so a manual edit from the CRM sticks even after the contact's
+    // WhatsApp profile name changes or they send another message.
+    if (name && !existingContact.name) patch.name = name
     if (bsuid && !existingContact.bsuid) patch.bsuid = bsuid
     if (username && username !== existingContact.username) {
       patch.username = username
